@@ -1,0 +1,189 @@
+import { UserAccount, AuthSession } from '../types';
+
+const SESSION_KEY = 'veg_app_auth_session_v2';
+const USERS_STORAGE_KEY = 'veg_app_users_v2';
+
+// 1. Younis Al-Afif (Main Admin)
+export const INITIAL_ADMIN_USER: UserAccount = {
+  id: 'usr_admin_younis',
+  name: 'يونس العفيف (مدير النظام)',
+  phone: '772317950',
+  countryCode: '+967',
+  username: '772317950',
+  role: 'admin',
+  pin: '7723',
+  avatarBadge: 'ي',
+  active: true,
+  createdAt: '2026-10-29',
+};
+
+// 2. Mohannad Al-Ahmadi (Co-Admin)
+export const INITIAL_ADMIN_MOHANNAD: UserAccount = {
+  id: 'usr_admin_mohannad',
+  name: 'مهند الأحمدي (مدير النظام)',
+  phone: '772178969',
+  countryCode: '+967',
+  username: '772178969',
+  role: 'admin',
+  pin: '7721',
+  avatarBadge: 'م',
+  active: true,
+  createdAt: '2026-10-29',
+};
+
+// Default initial accounts created by system
+export const INITIAL_SYSTEM_USERS: UserAccount[] = [
+  INITIAL_ADMIN_USER,
+  INITIAL_ADMIN_MOHANNAD,
+  {
+    id: 'usr_worker_field',
+    name: 'عامل المشتريات الميداني',
+    phone: '771234567',
+    countryCode: '+967',
+    username: '771234567',
+    role: 'worker',
+    pin: '8888',
+    avatarBadge: 'ع',
+    active: true,
+    createdAt: '2026-10-29',
+  },
+  {
+    id: 'usr_grocery_salah',
+    name: 'صلاح العماري (بقالة الصلاح)',
+    phone: '773456789',
+    countryCode: '+967',
+    username: '773456789',
+    role: 'grocery',
+    pin: '1111',
+    groceryId: 'g1',
+    avatarBadge: 'ص',
+    active: true,
+    createdAt: '2026-10-29',
+  },
+];
+
+export const AuthService = {
+  getUsers(): UserAccount[] {
+    try {
+      const raw = localStorage.getItem(USERS_STORAGE_KEY);
+      if (!raw) {
+        localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(INITIAL_SYSTEM_USERS));
+        return INITIAL_SYSTEM_USERS;
+      }
+      const parsed: UserAccount[] = JSON.parse(raw);
+      // Auto-merge Mohannad Al-Ahmadi if missing from previous session
+      if (!parsed.some((u) => u.phone === '772178969' || u.id === 'usr_admin_mohannad')) {
+        const merged = [INITIAL_ADMIN_USER, INITIAL_ADMIN_MOHANNAD, ...parsed.filter((u) => u.id !== 'usr_admin_younis')];
+        localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(merged));
+        return merged;
+      }
+      return parsed;
+    } catch {
+      return INITIAL_SYSTEM_USERS;
+    }
+  },
+
+  saveUsers(users: UserAccount[]): void {
+    try {
+      localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(users));
+    } catch (e) {
+      console.error('Failed to save users:', e);
+    }
+  },
+
+  addUser(user: Omit<UserAccount, 'id' | 'createdAt'>): UserAccount {
+    const users = this.getUsers();
+    const newUser: UserAccount = {
+      ...user,
+      id: `usr_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      createdAt: new Date().toISOString().split('T')[0],
+    };
+    const updated = [...users, newUser];
+    this.saveUsers(updated);
+    return newUser;
+  },
+
+  updateUser(updatedUser: UserAccount): void {
+    const users = this.getUsers();
+    const updated = users.map((u) => (u.id === updatedUser.id ? updatedUser : u));
+    this.saveUsers(updated);
+  },
+
+  deleteUser(userId: string): void {
+    // Prevent deleting main admins
+    if (userId === 'usr_admin_younis' || userId === 'usr_admin_mohannad') return;
+    const users = this.getUsers();
+    const updated = users.filter((u) => u.id !== userId);
+    this.saveUsers(updated);
+  },
+
+  getCurrentSession(): AuthSession | null {
+    try {
+      const raw = localStorage.getItem(SESSION_KEY);
+      if (!raw) return null;
+      return JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  },
+
+  login(
+    identifier: string,
+    pin: string,
+    rememberDevice = true
+  ): { success: boolean; session?: AuthSession; error?: string } {
+    // Clean spaces from phone number (e.g. "772 178 969" -> "772178969")
+    const trimmedId = identifier.replace(/\s+/g, '').toLowerCase();
+    const cleanPin = pin.replace(/\s+/g, '');
+    const users = this.getUsers();
+
+    // Match by phone number, username, or role
+    const account = users.find(
+      (u) =>
+        u.active &&
+        (u.phone === trimmedId ||
+          u.username.toLowerCase() === trimmedId ||
+          u.phone.replace(/^0+/, '') === trimmedId.replace(/^0+/, '') ||
+          u.role === trimmedId ||
+          (trimmedId === 'admin' && u.role === 'admin'))
+    );
+
+    if (!account) {
+      return { success: false, error: 'رقم الهاتف أو اسم المستخدم غير موجود' };
+    }
+
+    if (account.pin !== cleanPin) {
+      return { success: false, error: 'رمز الدخول (PIN) غير صحيح' };
+    }
+
+    const session: AuthSession = {
+      token: 'tok_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8),
+      user: account,
+      deviceName: navigator.userAgent.includes('Mobile') ? 'هاتف جوال (اليمن)' : 'جهاز سطح المكتب',
+      loggedAt: new Date().toLocaleDateString('ar-SA') + ' ' + new Date().toLocaleTimeString('ar-SA'),
+      rememberDevice,
+    };
+
+    if (rememberDevice) {
+      localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+    }
+
+    return { success: true, session };
+  },
+
+  logout(): void {
+    localStorage.removeItem(SESSION_KEY);
+  },
+
+  switchAccount(user: UserAccount): AuthSession {
+    const session: AuthSession = {
+      token: 'tok_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8),
+      user,
+      deviceName: 'جلسة سريعة',
+      loggedAt: new Date().toLocaleDateString('ar-SA') + ' ' + new Date().toLocaleTimeString('ar-SA'),
+      rememberDevice: true,
+    };
+    localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+    return session;
+  },
+};

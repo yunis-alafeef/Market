@@ -1,29 +1,72 @@
 @import "tailwindcss";
 
 @layer base {
-  :root {
+  :root,
+  [data-theme="royal_navy"] {
     --primary-navy: #0c2461;
     --secondary-blue: #1e3799;
     --accent-amber: #f6b93b;
     --worker-teal: #006266;
     --success-green: #009432;
     --bg-main: #f0f2f5;
+    --card-bg: #ffffff;
+    --text-primary: #0f172a;
+    --text-muted: #64748b;
+    --border-subtle: #e2e8f0;
+  }
+
+  [data-theme="indigo_gold"] {
+    --primary-navy: #1e1b4b;
+    --secondary-blue: #4338ca;
+    --accent-amber: #d97706;
+    --worker-teal: #0f766e;
+    --success-green: #059669;
+    --bg-main: #f8fafc;
+    --card-bg: #ffffff;
+    --text-primary: #0f172a;
+    --text-muted: #64748b;
+    --border-subtle: #cbd5e1;
+  }
+
+  [data-theme="emerald_botanical"] {
+    --primary-navy: #064e3b;
+    --secondary-blue: #047857;
+    --accent-amber: #eab308;
+    --worker-teal: #0d9488;
+    --success-green: #16a34a;
+    --bg-main: #f1f8f5;
+    --card-bg: #ffffff;
+    --text-primary: #064e3b;
+    --text-muted: #52796f;
+    --border-subtle: #d1e7dd;
+  }
+
+  [data-theme="dark_luxury"] {
+    --primary-navy: #0f172a;
+    --secondary-blue: #1e293b;
+    --accent-amber: #f59e0b;
+    --worker-teal: #14b8a6;
+    --success-green: #10b981;
+    --bg-main: #090d16;
+    --card-bg: #111827;
+    --text-primary: #f8fafc;
+    --text-muted: #94a3b8;
+    --border-subtle: #1f2937;
   }
 
   body {
     font-family: 'Cairo', 'Tajawal', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     background-color: var(--bg-main);
-    color: #1e293b;
+    color: var(--text-primary);
     -webkit-tap-highlight-color: transparent;
   }
 
-  /* Monospace tabular figures for all accounting amounts */
   .tabular-nums {
     font-variant-numeric: tabular-nums;
   }
 }
 
-/* Custom scrollbar for horizontal table scroll on mobile */
+/* Custom scrollbar */
 .scrollbar-thin::-webkit-scrollbar {
   height: 6px;
   width: 6px;
@@ -40,6 +83,11 @@
   background: #64748b;
 }
 
+/* Prevent awkward single-word wrapping on mobile */
+.nowrap-text {
+  white-space: nowrap;
+}
+
 /* Print styling for professional PDF & invoices */
 @media print {
   body {
@@ -47,7 +95,7 @@
     color: #000000 !important;
     padding: 0 !important;
     margin: 0 !important;
-    font-size: 11pt !important;
+    font-size: 10pt !important;
   }
 
   .no-print,

@@ -14,8 +14,12 @@ import {
   AuditLog,
   SystemSettings,
   DailyOrderRow,
+  ThemeId,
+  AuthSession,
+  UserAccount,
 } from './types';
 import { StorageService, getArabicDayName } from './services/storage';
+import { AuthService } from './services/auth';
 import { Header } from './components/Header';
 import { WorkerView } from './components/WorkerView';
 import { AdminReportsView } from './components/AdminReportsView';
@@ -26,11 +30,56 @@ import { AddVoucherModal } from './components/AddVoucherModal';
 import { AddItemModal } from './components/AddItemModal';
 import { AddSupplierModal } from './components/AddSupplierModal';
 import { InvoicePrintModal } from './components/InvoicePrintModal';
+import { LoginModal } from './components/LoginModal';
 
 export default function App() {
-  // Navigation & Role State
-  const [activePage, setActivePage] = useState<ActivePage>('worker');
-  const [currentRole, setCurrentRole] = useState<'worker' | 'admin' | 'grocery'>('worker');
+  // Authentication & Session
+  const [session, setSession] = useState<AuthSession | null>(() => AuthService.getCurrentSession());
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState<boolean>(() => {
+    // If no existing session on mobile device, prompt login immediately
+    const existing = AuthService.getCurrentSession();
+    return !existing;
+  });
+
+  // Current active user & role
+  const currentUser: UserAccount | null = session?.user || null;
+  const currentRole: 'worker' | 'admin' | 'grocery' = currentUser?.role || 'worker';
+
+  // Navigation state (initial page matches role)
+  const [activePage, setActivePage] = useState<ActivePage>(() => {
+    const s = AuthService.getCurrentSession();
+    if (s?.user.role === 'admin') return 'dashboard';
+    if (s?.user.role === 'grocery') return 'grocery';
+    return 'worker';
+  });
+
+  // Strict role isolation: worker only sees worker, grocery only sees grocery
+  useEffect(() => {
+    if (currentRole === 'worker' && activePage !== 'worker') {
+      setActivePage('worker');
+    } else if (currentRole === 'grocery' && activePage !== 'grocery') {
+      setActivePage('grocery');
+    }
+  }, [currentRole, activePage]);
+
+  // Themes state
+  const [currentTheme, setCurrentTheme] = useState<ThemeId>(() => {
+    try {
+      return (localStorage.getItem('veg_app_theme_v1') as ThemeId) || 'royal_navy';
+    } catch {
+      return 'royal_navy';
+    }
+  });
+
+  // Apply theme to document
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', currentTheme);
+    try {
+      localStorage.setItem('veg_app_theme_v1', currentTheme);
+    } catch {
+      // ignore
+    }
+  }, [currentTheme]);
 
   // Core Data Collections
   const [groceries, setGroceries] = useState<Grocery[]>(() => StorageService.getGroceries());
@@ -81,7 +130,7 @@ export default function App() {
     data: {},
   });
 
-  // Persistence Sync
+  // Sync to storage
   useEffect(() => {
     StorageService.saveGroceries(groceries);
   }, [groceries]);
@@ -127,12 +176,7 @@ export default function App() {
     const newLog: AuditLog = {
       id: `log_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       timestamp,
-      user:
-        currentRole === 'admin'
-          ? 'مدير النظام (أحمد)'
-          : currentRole === 'worker'
-          ? 'عامل الميدان (أبو فهد)'
-          : 'بوابة البقالة',
+      user: currentUser ? currentUser.name : 'مستخدم الجوال',
       role: currentRole,
       action,
       target,
@@ -175,7 +219,6 @@ export default function App() {
   };
 
   // The KEY REQUIRED FEATURE: "تعديل شامل لليوم"
-  // Switches to daily worksheet pre-loaded with that past day's data, retaining date
   const handleEditDayComprehensive = (sheet: DailySheet) => {
     setCurrentWorksheetDate(sheet.date);
     setActivePage('worker');
@@ -198,8 +241,6 @@ export default function App() {
 
     setVouchers((prev) => [newVoucher, ...prev]);
 
-    // Update balances:
-    // If receipt from grocery: reduce grocery balance (they paid us)
     if (voucherData.type === 'receipt' && voucherData.partyType === 'grocery') {
       setGroceries((prev) =>
         prev.map((g) => {
@@ -218,9 +259,7 @@ export default function App() {
           return g;
         })
       );
-    }
-    // If payment to supplier: reduce supplier balance (we paid them)
-    else if (voucherData.type === 'payment' && voucherData.partyType === 'supplier') {
+    } else if (voucherData.type === 'payment' && voucherData.partyType === 'supplier') {
       setSuppliers((prev) =>
         prev.map((s) => {
           if (s.id === voucherData.partyId) {
@@ -250,7 +289,6 @@ export default function App() {
 
     setItems((prev) => [...prev, newItem]);
 
-    // Add new row to current sheet
     const newRow: DailyOrderRow = {
       id: `row_${currentSheet.date}_${newItem.id}_${Date.now()}`,
       itemId: newItem.id,
@@ -303,7 +341,6 @@ export default function App() {
 
     setGroceries((prev) => [...prev, newGrocery]);
 
-    // Ensure all sheets now have this grocery initialized with 0 in all rows
     setDailySheets((prevSheets) =>
       prevSheets.map((sheet) => ({
         ...sheet,
@@ -342,14 +379,31 @@ export default function App() {
     window.location.reload();
   };
 
+  const handleLoginSuccess = (newSession: AuthSession) => {
+    setSession(newSession);
+    setIsLoginModalOpen(false);
+    if (newSession.user.role === 'admin') setActivePage('dashboard');
+    else if (newSession.user.role === 'grocery') setActivePage('grocery');
+    else setActivePage('worker');
+  };
+
+  const handleLogout = () => {
+    AuthService.logout();
+    setSession(null);
+    setIsLoginModalOpen(true);
+  };
+
   return (
-    <div className="min-h-screen bg-[#f0f2f5] flex flex-col font-sans text-slate-800">
+    <div className="min-h-screen flex flex-col font-sans transition-colors duration-200">
       {/* Universal Top Header */}
       <Header
         activePage={activePage}
         onPageChange={setActivePage}
-        currentRole={currentRole}
-        onRoleChange={setCurrentRole}
+        currentUser={currentUser}
+        onOpenLogin={() => setIsLoginModalOpen(true)}
+        onLogout={handleLogout}
+        currentTheme={currentTheme}
+        onThemeChange={setCurrentTheme}
         onOpenNewVoucher={() => {
           setVoucherModalConfig({ defaultType: 'receipt' });
           setIsVoucherModalOpen(true);
@@ -452,6 +506,7 @@ export default function App() {
             sheets={dailySheets}
             vouchers={vouchers}
             settings={settings}
+            currentUser={currentUser}
             onOpenPrintModal={(type, data) => {
               setPrintModalData({
                 title:
@@ -468,6 +523,13 @@ export default function App() {
       </main>
 
       {/* Modals */}
+      <LoginModal
+        isOpen={isLoginModalOpen}
+        onClose={() => setIsLoginModalOpen(false)}
+        onLoginSuccess={handleLoginSuccess}
+        isMandatory={!session}
+      />
+
       <AddVoucherModal
         isOpen={isVoucherModalOpen}
         onClose={() => setIsVoucherModalOpen(false)}

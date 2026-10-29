@@ -17,6 +17,7 @@ interface GroceryPortalViewProps {
   sheets: DailySheet[];
   vouchers: Voucher[];
   settings: SystemSettings;
+  currentUser?: { role: 'admin' | 'worker' | 'grocery'; groceryId?: string } | null;
   onOpenPrintModal: (
     type: 'statement' | 'morning_sort',
     data: {
@@ -38,13 +39,22 @@ export const GroceryPortalView: React.FC<GroceryPortalViewProps> = ({
   sheets,
   vouchers,
   settings,
+  currentUser,
   onOpenPrintModal,
 }) => {
-  const [selectedGroceryId, setSelectedGroceryId] = useState<string>(groceries[0]?.id || '');
+  // If grocery user, lock to their groceryId
+  const defaultGId =
+    currentUser?.role === 'grocery' && currentUser.groceryId
+      ? currentUser.groceryId
+      : groceries[0]?.id || '';
+
+  const [selectedGroceryId, setSelectedGroceryId] = useState<string>(defaultGId);
   const [activeTab, setActiveTab] = useState<'today_delivery' | 'statement'>('today_delivery');
 
   const selectedGrocery =
-    groceries.find((g) => g.id === selectedGroceryId) || groceries[0];
+    (currentUser?.role === 'grocery' && currentUser.groceryId
+      ? groceries.find((g) => g.id === currentUser.groceryId)
+      : groceries.find((g) => g.id === selectedGroceryId)) || groceries[0];
   const todaySheet = sheets[0] || sheets[sheets.length - 1];
 
   // Calculate today's delivery items for this grocery
@@ -145,21 +155,28 @@ export const GroceryPortalView: React.FC<GroceryPortalViewProps> = ({
           </div>
         </div>
 
-        {/* Grocery Switcher for Testing/Portal */}
-        <div className="flex items-center gap-3">
-          <span className="text-xs font-semibold text-slate-600">تبديل حساب البقالة:</span>
-          <select
-            value={selectedGroceryId}
-            onChange={(e) => setSelectedGroceryId(e.target.value)}
-            className="px-3 py-2 text-xs sm:text-sm font-bold bg-slate-50 border border-slate-300 rounded-xl focus:outline-none"
-          >
-            {groceries.map((g) => (
-              <option key={g.id} value={g.id}>
-                ({g.code}) {g.name}
-              </option>
-            ))}
-          </select>
-        </div>
+        {/* Grocery Switcher for Admin Only */}
+        {currentUser?.role === 'admin' ? (
+          <div className="flex items-center gap-3">
+            <span className="text-xs font-semibold text-slate-600">تبديل حساب البقالة (معاينة المدير):</span>
+            <select
+              value={selectedGroceryId}
+              onChange={(e) => setSelectedGroceryId(e.target.value)}
+              className="px-3 py-2 text-xs sm:text-sm font-bold bg-slate-50 border border-slate-300 rounded-xl focus:outline-none"
+            >
+              {groceries.map((g) => (
+                <option key={g.id} value={g.id}>
+                  ({g.code}) {g.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : (
+          <div className="bg-emerald-50 text-[#009432] border border-emerald-200 px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5">
+            <ShieldCheck className="w-4 h-4" />
+            <span>حساب موثق: {selectedGrocery?.name}</span>
+          </div>
+        )}
       </div>
 
       {/* Grocery Financial Status Cards */}

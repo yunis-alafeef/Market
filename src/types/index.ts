@@ -95,6 +95,7 @@ export interface SystemSettings {
   businessName: string;
   businessSubname: string;
   phone: string;
+  countryCode: string;
   taxOrRegNumber: string;
   address: string;
   invoiceNotes: string;
@@ -109,3 +110,29 @@ export interface SystemSettings {
 }
 
 export type ActivePage = 'worker' | 'reports' | 'dashboard' | 'settings' | 'grocery';
+
+export type ThemeId = 'royal_navy' | 'indigo_gold' | 'emerald_botanical' | 'dark_luxury';
+
+export type PrintTemplateId = 'royal_classic' | 'modern_minimal';
+
+export interface UserAccount {
+  id: string;
+  name: string;
+  phone: string;
+  countryCode: string; // default '+967'
+  username: string;
+  role: 'admin' | 'worker' | 'grocery';
+  pin: string;
+  groceryId?: string; // if role === 'grocery'
+  avatarBadge: string;
+  active: boolean;
+  createdAt: string;
+}
+
+export interface AuthSession {
+  token: string;
+  user: UserAccount;
+  deviceName: string;
+  loggedAt: string;
+  rememberDevice: boolean;
+}

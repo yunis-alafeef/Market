@@ -10,19 +10,20 @@ import {
 import {
   Save,
   Plus,
+  Minus,
   Copy,
   Trash2,
   CheckCircle2,
   Clock,
   Printer,
-  ChevronRight,
   Sparkles,
   ShoppingBag,
   Truck,
-  ArrowRightLeft,
-  Calendar,
+  LayoutGrid,
+  Table as TableIcon,
+  ChevronLeft,
+  ChevronRight,
   Lock,
-  Unlock,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -55,6 +56,10 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
 }) => {
   // Tabs: 'night_orders' (طلبات الليل والشراء) vs 'morning_sort' (فرز وتوزيع الصباح)
   const [activeTab, setActiveTab] = useState<'night_orders' | 'morning_sort'>('night_orders');
+  // View mode for night orders: 'cards' (Mobile-First Touch Cards) vs 'table' (Traditional Grid)
+  const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
+  // Selected grocery for the mobile cards stepper
+  const [activeCardGroceryId, setActiveCardGroceryId] = useState<string>(groceries[0]?.id || '');
   // Selected grocery filter for morning sort view
   const [selectedSortGrocery, setSelectedSortGrocery] = useState<string>('all');
   // Active row being quick-edited with fractions pad
@@ -62,13 +67,13 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
 
   const isLocked = settings.permissions.lockDailySheetAfterSave && sheet.nightOrdersSaved && currentRole === 'worker';
 
-  // Quick fraction adder helper
-  const handleFractionAdd = (rowId: string, groceryId: string, delta: number, isAbsolute = false) => {
+  // Incremental stepper helper (+ / -)
+  const handleStepQuantity = (rowId: string, groceryId: string, delta: number) => {
     if (isLocked) return;
     const updatedRows = sheet.rows.map((row) => {
       if (row.id !== rowId) return row;
       const current = row.quantities[groceryId] || 0;
-      const nextVal = isAbsolute ? delta : Math.max(0, Math.round((current + delta) * 100) / 100);
+      const nextVal = Math.max(0, Math.round((current + delta) * 100) / 100);
 
       const newQuantities = { ...row.quantities, [groceryId]: nextVal };
       const totalQty = Object.values(newQuantities).reduce((sum, q) => sum + (Number(q) || 0), 0);
@@ -88,13 +93,17 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
     recalculateAndSave(updatedRows);
   };
 
-  // Direct quantity input change
-  const handleQuantityChange = (rowId: string, groceryId: string, val: string) => {
+  // Direct fraction or absolute setter
+  const handleSetQuantity = (rowId: string, groceryId: string, val: number, isDelta = false) => {
     if (isLocked) return;
-    const num = parseFloat(val) || 0;
     const updatedRows = sheet.rows.map((row) => {
       if (row.id !== rowId) return row;
-      const newQuantities = { ...row.quantities, [groceryId]: num };
+      const current = row.quantities[groceryId] || 0;
+      const nextVal = isDelta
+        ? Math.max(0, Math.round((current + val) * 100) / 100)
+        : Math.max(0, val);
+
+      const newQuantities = { ...row.quantities, [groceryId]: nextVal };
       const totalQty = Object.values(newQuantities).reduce((sum, q) => sum + (Number(q) || 0), 0);
       const totalCost = totalQty * row.costPrice;
       const totalSale = totalQty * row.salePrice;
@@ -182,7 +191,6 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
       id: `row_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       supplierName: `${target.supplierName} (مورد إضافي)`,
       status: 'pending',
-      // Start with empty quantities or split
       quantities: groceries.reduce((acc, g) => {
         acc[g.id] = 0;
         return acc;
@@ -201,19 +209,19 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
     recalculateAndSave(newRows);
   };
 
-  // Remove Row
+  // Delete Row
   const handleDeleteRow = (rowId: string) => {
     const target = sheet.rows.find((r) => r.id === rowId);
     if (!target) return;
 
-    if (window.confirm(`هل أنت متأكد من حذف سطر (${target.itemName})؟`)) {
+    if (window.confirm(`هل أنت متأكد من حذف صنف (${target.itemName}) من الكشف؟`)) {
       const newRows = sheet.rows.filter((r) => r.id !== rowId);
       onAddAuditLog('حذف سطر صنف', target.itemName, `${target.totalQuantity} ${target.unit}`, 'محذوف');
       recalculateAndSave(newRows);
     }
   };
 
-  // Recalculate sheet totals and dispatch update
+  // Recalculate sheet totals
   const recalculateAndSave = (newRows: DailyOrderRow[]) => {
     const totalCost = newRows.reduce((sum, r) => sum + r.totalCost, 0);
     const totalSale = newRows.reduce((sum, r) => sum + r.totalSale, 0);
@@ -233,7 +241,6 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
   const handleSaveNightOrders = () => {
     const totalQty = sheet.rows.reduce((sum, r) => sum + r.totalQuantity, 0);
 
-    // Build morning sorted structure
     const updatedRows = sheet.rows.map((row) => {
       const morningSorted = { ...row.morningSorted };
       groceries.forEach((g) => {
@@ -260,11 +267,11 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
 
     try {
       confetti({
-        particleCount: 70,
-        spread: 60,
+        particleCount: 80,
+        spread: 70,
         origin: { y: 0.6 },
       });
-    } catch (e) {
+    } catch {
       // ignore
     }
 
@@ -272,10 +279,10 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
       'حفظ طلبات الليل وتوليد فرز الصباح',
       `كشف ${sheet.dayName} ${sheet.date}`,
       '',
-      `تم تثبيت ${sheet.rows.length} صنف بإجمالي ${totalQty} وحدة وتوليد جداول الفرز الصباحي`
+      `تم تثبيت ${sheet.rows.length} صنف بإجمالي ${totalQty} وحدة وتوليد جداول فرز الصباح`
     );
 
-    alert('✅ تم حفظ وتثبيت طلبات الليل وتوليد جداول فرز الصباح المستقلة لكل بقالة تلقائياً!');
+    alert('✅ تم حفظ طلبات الليل وتوليد جداول فرز الصباح المستقلة لكل بقالة بنجاح!');
   };
 
   // Morning Sort Delivery Toggle
@@ -307,453 +314,627 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
   const purchasedRowsCount = sheet.rows.filter((r) => r.status === 'purchased').length;
 
   return (
-    <div className="space-y-4 max-w-7xl mx-auto pb-16">
+    <div className="space-y-4 max-w-7xl mx-auto pb-20">
       {/* Top Banner / Date & Mode Strip */}
       <div className="bg-white rounded-2xl shadow-xs border border-slate-200 p-4 sm:p-5 flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-xl bg-[#006266]/10 text-[#006266] flex items-center justify-center shrink-0">
+          <div className="w-11 h-11 rounded-2xl bg-[#006266]/10 text-[#006266] flex items-center justify-center shrink-0">
             <ShoppingBag className="w-6 h-6" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-lg sm:text-xl font-bold text-slate-900">
-                كشف اليومية الميداني: {sheet.dayName}
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-base sm:text-lg font-black text-slate-900 whitespace-nowrap">
+                كشف اليومية: {sheet.dayName}
               </h2>
-              <span className="text-xs font-mono bg-slate-100 text-slate-700 px-2.5 py-0.5 rounded-md font-semibold">
+              <span className="text-xs font-mono bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md font-bold whitespace-nowrap">
                 {sheet.date}
               </span>
               {sheet.nightOrdersSaved ? (
-                <span className="text-xs bg-[#009432]/10 text-[#009432] font-bold px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                <span className="text-xs bg-emerald-50 text-[#009432] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 whitespace-nowrap">
                   <CheckCircle2 className="w-3.5 h-3.5" />
-                  تم اعتماد طلبات الليل
+                  معتمد للفرز
                 </span>
               ) : (
-                <span className="text-xs bg-[#f6b93b]/20 text-amber-800 font-bold px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                <span className="text-xs bg-amber-50 text-amber-800 font-bold px-2 py-0.5 rounded-full flex items-center gap-1 whitespace-nowrap">
                   <Clock className="w-3.5 h-3.5" />
-                  مسودة مشتريات جارية
+                  مسودة مشتريات
                 </span>
               )}
             </div>
-            <p className="text-xs text-slate-500 mt-0.5">
-              إدخال الكميات بالأصناف والبقالات الخمس مع أزرار الكسور السريعة وحسابات الشراء المباشرة.
+            <p className="text-xs text-slate-500 mt-0.5 hidden sm:block">
+              إدخال الكميات بالكسور وأزرار الرفع والإنقاص السريعة دون الحاجة للكتابة اليدوية.
             </p>
           </div>
         </div>
 
-        {/* Action Controls & Navigation between Night Orders & Morning Sort */}
+        {/* View Switchers & Action Controls */}
         <div className="flex flex-wrap items-center gap-2">
-          {/* Main Action Tabs */}
+          {/* Mobile Display Mode: Cards vs Table */}
+          <div className="bg-slate-100 p-1 rounded-xl flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => setViewMode('cards')}
+              className={`flex items-center gap-1 px-3 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer ${
+                viewMode === 'cards'
+                  ? 'bg-white text-[#006266] shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+              title="عرض بطاقات لمس مخصصة لشاشة الجوال"
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+              <span>بطاقات الجوال</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('table')}
+              className={`flex items-center gap-1 px-3 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer ${
+                viewMode === 'table'
+                  ? 'bg-white text-[#006266] shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+              title="عرض الجدول الميداني العريض"
+            >
+              <TableIcon className="w-3.5 h-3.5" />
+              <span>الجدول</span>
+            </button>
+          </div>
+
+          {/* Tab Switcher: Night Orders vs Morning Sort */}
           <div className="bg-slate-100 p-1 rounded-xl flex items-center gap-1">
             <button
               onClick={() => setActiveTab('night_orders')}
-              className={`px-3 py-1.5 text-xs sm:text-sm font-bold rounded-lg transition-colors cursor-pointer ${
+              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer whitespace-nowrap ${
                 activeTab === 'night_orders'
                   ? 'bg-[#006266] text-white shadow-xs'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              طلبات الليل والشراء ({sheet.rows.length})
+              طلبات الليل ({sheet.rows.length})
             </button>
             <button
               onClick={() => setActiveTab('morning_sort')}
-              className={`px-3 py-1.5 text-xs sm:text-sm font-bold rounded-lg transition-colors cursor-pointer ${
+              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer whitespace-nowrap ${
                 activeTab === 'morning_sort'
                   ? 'bg-[#006266] text-white shadow-xs'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              فرز الصباح والتسليم
+              فرز الصباح
             </button>
           </div>
 
           {/* Quick Print Button */}
           <button
             onClick={() => onOpenPrintModal(activeTab === 'night_orders' ? 'daily_invoice' : 'morning_sort')}
-            className="flex items-center gap-1 px-3 py-1.5 text-xs sm:text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl transition-colors cursor-pointer"
-            title="معاينة الطباعة وتصدير PDF"
+            className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl transition-colors cursor-pointer whitespace-nowrap"
           >
-            <Printer className="w-4 h-4 text-slate-600" />
+            <Printer className="w-3.5 h-3.5 text-slate-600" />
             <span className="hidden sm:inline">طباعة / PDF</span>
           </button>
         </div>
       </div>
 
-      {/* Main KPI Bar for Field Worker */}
+      {/* KPI Stats Strip */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs">
-          <span className="text-xs text-slate-500 block">إجمالي الكميات المطلوبة</span>
-          <span className="text-xl sm:text-2xl font-bold font-mono tabular-nums text-[#006266]">
+        <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs">
+          <span className="text-xs text-slate-500 block whitespace-nowrap">الكميات المطلوبة</span>
+          <span className="text-xl sm:text-2xl font-black font-mono tabular-nums text-[#006266]">
             {totalUnits.toLocaleString()}{' '}
-            <span className="text-xs font-normal text-slate-500">وحدة/عبوة</span>
+            <span className="text-xs font-normal text-slate-500">وحدة</span>
           </span>
         </div>
 
-        <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs">
-          <span className="text-xs text-slate-500 block">حالة الشراء بالسوق</span>
-          <div className="flex items-center gap-1.5 mt-0.5">
-            <span className="text-xl sm:text-2xl font-bold font-mono tabular-nums text-[#009432]">
+        <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs">
+          <span className="text-xs text-slate-500 block whitespace-nowrap">تم شراؤها بالسوق</span>
+          <div className="flex items-center gap-1 mt-0.5">
+            <span className="text-xl sm:text-2xl font-black font-mono tabular-nums text-[#009432]">
               {purchasedRowsCount}
             </span>
-            <span className="text-xs text-slate-400 font-mono">/ {sheet.rows.length} تم شراؤها</span>
+            <span className="text-xs text-slate-400 font-mono">/ {sheet.rows.length}</span>
           </div>
         </div>
 
         {settings.permissions.workerCanViewPurchaseCost && (
-          <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs">
-            <span className="text-xs text-slate-500 block">تكلفة الشراء التقديرية</span>
-            <span className="text-xl sm:text-2xl font-bold font-mono tabular-nums text-[#0c2461]">
+          <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs">
+            <span className="text-xs text-slate-500 block whitespace-nowrap">تكلفة الشراء</span>
+            <span className="text-xl sm:text-2xl font-black font-mono tabular-nums text-[#0c2461]">
               {sheet.totalCost.toLocaleString()}{' '}
               <span className="text-xs font-normal text-slate-500">ر.س</span>
             </span>
           </div>
         )}
 
-        <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs">
-          <span className="text-xs text-slate-500 block">إجمالي المبيعات المقدرة</span>
-          <span className="text-xl sm:text-2xl font-bold font-mono tabular-nums text-[#0c2461] bg-[#f6b93b]/20 px-2 py-0.5 rounded-lg inline-block">
+        <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs">
+          <span className="text-xs text-slate-500 block whitespace-nowrap">إجمالي المبيعات</span>
+          <span className="text-xl sm:text-2xl font-black font-mono tabular-nums text-[#0c2461] bg-[#f6b93b]/20 px-2 py-0.5 rounded-lg inline-block">
             {sheet.totalSale.toLocaleString()}{' '}
             <span className="text-xs font-normal text-slate-800">ر.س</span>
           </span>
         </div>
       </div>
 
-      {/* Quick Fractions Helper Bar for Touch / Mobile */}
-      {activeTab === 'night_orders' && !isLocked && (
-        <div className="bg-[#006266]/5 border border-[#006266]/20 rounded-xl p-3 flex flex-wrap items-center justify-between gap-3 text-xs">
-          <div className="flex items-center gap-1.5 text-[#006266] font-bold">
-            <Sparkles className="w-4 h-4 text-[#f6b93b]" />
-            <span>لوحة الكسور السريعة (المس الخانة ثم اضغط):</span>
-          </div>
-          <div className="flex flex-wrap items-center gap-1.5">
-            {[
-              { label: '¼', val: 0.25, abs: false },
-              { label: '½', val: 0.5, abs: false },
-              { label: '¾', val: 0.75, abs: false },
-              { label: '1', val: 1.0, abs: true },
-              { label: '1.5', val: 1.5, abs: true },
-              { label: '2', val: 2.0, abs: true },
-              { label: '+1', val: 1.0, abs: false },
-              { label: 'مسح (0)', val: 0, abs: true },
-            ].map((btn, idx) => (
-              <button
-                key={idx}
-                type="button"
-                onClick={() => {
-                  if (activeCell) {
-                    handleFractionAdd(activeCell.rowId, activeCell.groceryId, btn.val, btn.abs);
-                  } else {
-                    alert('يرجى أولاً النقر على خانة كمية البقالة لتطبيق الكسر عليها مباشرة');
-                  }
-                }}
-                className="px-2.5 py-1 font-bold text-xs bg-white hover:bg-[#006266] hover:text-white border border-[#006266]/30 text-[#006266] rounded-lg transition-colors shadow-2xs active:scale-95 cursor-pointer tabular-nums"
-              >
-                {btn.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* Lock Notice if locked */}
       {isLocked && (
-        <div className="bg-amber-50 border border-amber-200 p-3 rounded-xl flex items-center justify-between text-xs text-amber-800">
+        <div className="bg-amber-50 border border-amber-200 p-3 rounded-2xl flex items-center justify-between text-xs text-amber-800">
           <div className="flex items-center gap-2">
             <Lock className="w-4 h-4 text-amber-600" />
-            <span>تم قفل كشف اليومية بعد حفظ طلبات الليل لمنع التعديل الميداني غير المصرح به.</span>
+            <span>كشف اليومية مقفل حالياً بعد حفظ طلبات الليل. تواصل مع المدير للتعديل.</span>
           </div>
         </div>
       )}
 
-      {/* TAB 1: NIGHT ORDERS WORKSHEET (الكشف الميداني لطلبات الليل) */}
-      {activeTab === 'night_orders' && (
-        <div className="bg-white rounded-2xl shadow-xs border border-slate-200 overflow-hidden">
-          {/* Action buttons above the table */}
-          <div className="p-3 sm:p-4 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
-            <div className="flex flex-wrap items-center gap-2">
-              {/* Add item button */}
-              {(currentRole === 'admin' || settings.permissions.workerCanAddItem) && (
-                <button
-                  onClick={onOpenAddItem}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-[#006266] hover:bg-[#004e51] rounded-xl transition-colors cursor-pointer shadow-2xs"
-                >
-                  <Plus className="w-4 h-4" />
-                  + إضافة صنف جديد
-                </button>
-              )}
-
-              {/* Add supplier button */}
-              {(currentRole === 'admin' || settings.permissions.workerCanAddSupplier) && (
-                <button
-                  onClick={onOpenAddSupplier}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-700 bg-white hover:bg-slate-100 border border-slate-300 rounded-xl transition-colors cursor-pointer"
-                >
-                  <Truck className="w-4 h-4 text-slate-500" />
-                  + مورد جديد
-                </button>
-              )}
-            </div>
-
-            {/* Save Night Orders Button */}
+      {/* Action Buttons Strip */}
+      <div className="bg-white p-3 rounded-2xl border border-slate-200 flex flex-wrap items-center justify-between gap-3 shadow-xs">
+        <div className="flex flex-wrap items-center gap-2">
+          {(currentRole === 'admin' || settings.permissions.workerCanAddItem) && (
             <button
-              onClick={handleSaveNightOrders}
-              className="flex items-center gap-2 px-5 py-2 text-xs sm:text-sm font-bold text-white bg-[#009432] hover:bg-[#007b29] rounded-xl transition-all shadow-md cursor-pointer active:scale-95"
+              onClick={onOpenAddItem}
+              className="flex items-center gap-1 px-3.5 py-2 text-xs font-bold text-white bg-[#006266] hover:bg-[#004e51] rounded-xl transition-colors cursor-pointer shadow-xs whitespace-nowrap"
             >
-              <Save className="w-4 h-4" />
-              حفظ طلبات الليل وتوليد فرز الصباح
+              <Plus className="w-4 h-4" />
+              <span>+ صنف جديد</span>
             </button>
-          </div>
+          )}
 
-          {/* Table Container with Horizontal Scroll */}
-          <div className="overflow-x-auto scrollbar-thin">
-            <table className="w-full text-right border-collapse text-xs sm:text-sm min-w-[950px]">
-              <thead>
-                <tr className="bg-[#0c2461] text-white select-none">
-                  <th className="p-3 w-10 text-center font-bold">#</th>
-                  <th className="p-3 font-bold sticky right-0 bg-[#0c2461] z-10 min-w-[130px]">
-                    الصنف (الوحدة)
-                  </th>
-                  <th className="p-3 font-bold min-w-[170px]">المورد</th>
-                  {/* Grocery Columns */}
-                  {groceries.map((g) => (
-                    <th
-                      key={g.id}
-                      className="p-3 text-center border-r border-[#1e3799] font-bold min-w-[65px] bg-[#0c2461]/90"
-                      title={g.name}
-                    >
-                      <div className="text-sm font-black text-[#f6b93b]">{g.code}</div>
-                      <div className="text-[10px] text-slate-300 font-normal truncate max-w-[60px] mx-auto">
-                        {g.name.replace('بقالة', '').replace('سوبرماركت', '')}
-                      </div>
-                    </th>
-                  ))}
-                  <th className="p-3 text-center font-bold bg-[#1e3799]/80 min-w-[70px]">
-                    المجموع
-                  </th>
-                  {settings.permissions.workerCanViewPurchaseCost && (
-                    <th className="p-3 text-center font-bold min-w-[80px]">سعر الشراء</th>
-                  )}
-                  <th className="p-3 text-center font-bold min-w-[80px]">سعر البيع</th>
-                  <th className="p-3 text-center font-bold min-w-[110px]">حالة الشراء</th>
-                  <th className="p-3 text-center font-bold w-20">إجراءات</th>
-                </tr>
-              </thead>
-              <tbody>
+          {(currentRole === 'admin' || settings.permissions.workerCanAddSupplier) && (
+            <button
+              onClick={onOpenAddSupplier}
+              className="flex items-center gap-1 px-3 py-2 text-xs font-bold text-slate-700 bg-white hover:bg-slate-100 border border-slate-300 rounded-xl transition-colors cursor-pointer whitespace-nowrap"
+            >
+              <Truck className="w-4 h-4 text-slate-500" />
+              <span>+ مورد جديد</span>
+            </button>
+          )}
+        </div>
+
+        <button
+          onClick={handleSaveNightOrders}
+          className="flex items-center gap-2 px-5 py-2 text-xs sm:text-sm font-black text-white bg-[#009432] hover:bg-[#007b29] rounded-xl transition-all shadow-md cursor-pointer active:scale-95 whitespace-nowrap"
+        >
+          <Save className="w-4 h-4" />
+          <span>حفظ طلبات الليل وتوليد فرز الصباح</span>
+        </button>
+      </div>
+
+      {/* TAB 1: NIGHT ORDERS (CARDS OR TABLE) */}
+      {activeTab === 'night_orders' && (
+        <>
+          {/* MODE A: MOBILE TOUCH CARDS (Designed specifically for Mobile Ergonomics!) */}
+          {viewMode === 'cards' ? (
+            <div className="space-y-4">
+              {/* Grocery Selector Strip for Cards View */}
+              <div className="bg-white rounded-2xl p-3 border border-slate-200 shadow-xs">
+                <div className="flex items-center justify-between text-xs font-bold text-slate-700 mb-2">
+                  <span>اختر البقالة لضبط كمياتها عبر أزرار الرفع والإنقاص:</span>
+                  <span className="text-[#006266] font-mono">
+                    {sheet.rows.reduce(
+                      (sum, r) => sum + (r.quantities[activeCardGroceryId] || 0),
+                      0
+                    )}{' '}
+                    وحدة للبقالة المحددة
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 overflow-x-auto scrollbar-thin pb-1">
+                  {groceries.map((g) => {
+                    const isSelected = activeCardGroceryId === g.id;
+                    const totalForG = sheet.rows.reduce(
+                      (sum, r) => sum + (r.quantities[g.id] || 0),
+                      0
+                    );
+
+                    return (
+                      <button
+                        key={g.id}
+                        type="button"
+                        onClick={() => setActiveCardGroceryId(g.id)}
+                        className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+                          isSelected
+                            ? 'bg-[#006266] text-white shadow-md ring-2 ring-[#f6b93b]/60'
+                            : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                        }`}
+                      >
+                        <span
+                          className={`w-6 h-6 rounded-lg font-black text-xs flex items-center justify-center shrink-0 ${
+                            isSelected
+                              ? 'bg-[#f6b93b] text-[#0c2461]'
+                              : 'bg-white text-slate-800 border border-slate-200'
+                          }`}
+                        >
+                          {g.code}
+                        </span>
+                        <span>{g.name.replace('بقالة', '').replace('سوبرماركت', '')}</span>
+                        <span
+                          className={`px-1.5 py-0.5 rounded-md font-mono text-[11px] ${
+                            isSelected ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
+                          }`}
+                        >
+                          {totalForG}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Items Cards List */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {sheet.rows.map((row, index) => {
-                  return (
-                    <tr
-                      key={row.id}
-                      className={`border-b border-slate-200 transition-colors ${
-                        index % 2 === 0 ? 'bg-white' : 'bg-slate-50/70'
-                      } ${row.status === 'purchased' ? 'bg-emerald-50/40' : ''}`}
-                    >
-                      {/* Row Index */}
-                      <td className="p-2.5 text-center font-mono text-slate-400 text-xs">
-                        {index + 1}
-                      </td>
+                  const currentQty = row.quantities[activeCardGroceryId] || 0;
+                  const activeGrocery = groceries.find((g) => g.id === activeCardGroceryId) || groceries[0];
 
-                      {/* Item Name & Unit (Sticky Right for easy horizontal browsing) */}
-                      <td className="p-2.5 font-bold text-slate-900 sticky right-0 bg-inherit z-10 shadow-xs border-l border-slate-200">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-base text-slate-900">{row.itemName}</span>
+                  return (
+                    <div
+                      key={row.id}
+                      className={`bg-white rounded-3xl border transition-all p-4 shadow-xs relative flex flex-col justify-between ${
+                        row.status === 'purchased'
+                          ? 'border-emerald-300 bg-emerald-50/20'
+                          : 'border-slate-200 hover:border-slate-300'
+                      }`}
+                    >
+                      <div>
+                        {/* Top Card Bar: Item Name & Purchase Status */}
+                        <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-3 mb-3">
+                          <div className="flex items-center gap-2">
+                            <span className="w-7 h-7 rounded-lg bg-slate-100 text-slate-500 font-mono text-xs flex items-center justify-center font-bold">
+                              {index + 1}
+                            </span>
+                            <div className="flex items-baseline gap-1.5 whitespace-nowrap">
+                              <h3 className="font-black text-lg text-slate-900">{row.itemName}</h3>
+                              <span className="text-xs font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
+                                {row.unit}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Purchase Status Toggle */}
+                          <button
+                            type="button"
+                            disabled={isLocked}
+                            onClick={() => togglePurchaseStatus(row.id)}
+                            className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0 active:scale-95 ${
+                              row.status === 'purchased'
+                                ? 'bg-[#009432] text-white shadow-xs'
+                                : 'bg-amber-100 text-amber-900 border border-amber-300 hover:bg-amber-200'
+                            }`}
+                          >
+                            {row.status === 'purchased' ? (
+                              <>
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                <span>تم الشراء</span>
+                              </>
+                            ) : (
+                              <>
+                                <Clock className="w-3.5 h-3.5 text-amber-700" />
+                                <span>قيد الشراء</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+
+                        {/* Supplier Selector Row (Single Line) */}
+                        <div className="flex items-center justify-between gap-2 text-xs mb-3 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                          <span className="text-slate-500 font-medium whitespace-nowrap shrink-0">
+                            المورد:
+                          </span>
+                          <select
+                            disabled={isLocked}
+                            value={row.supplierId}
+                            onChange={(e) => handleSupplierChange(row.id, e.target.value)}
+                            className="bg-transparent font-bold text-slate-800 focus:outline-none text-xs truncate max-w-[200px]"
+                          >
+                            {suppliers.map((s) => (
+                              <option key={s.id} value={s.id}>
+                                {s.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* Total Quantity for All Groceries Badge */}
+                        <div className="flex items-center justify-between text-xs text-slate-600 mb-3 px-1">
+                          <span className="whitespace-nowrap">
+                            إجمالي كافة البقالات: <strong className="font-mono text-[#006266] text-sm">{row.totalQuantity} {row.unit}</strong>
+                          </span>
+                          {settings.permissions.workerCanViewPurchaseCost && (
+                            <span className="whitespace-nowrap font-mono text-slate-700">
+                              سعر الشراء: <strong>{row.costPrice} ر.س</strong>
+                            </span>
+                          )}
+                        </div>
+
+                        {/* THE STEPPER BOX FOR ACTIVE GROCERY (Huge, thumb-friendly buttons) */}
+                        <div className="bg-[#006266]/5 border border-[#006266]/20 rounded-2xl p-3.5 mb-3">
+                          <div className="flex items-center justify-between text-xs font-bold text-[#006266] mb-2">
+                            <span className="whitespace-nowrap">
+                              كمية ({activeGrocery?.name.replace('بقالة', '')}):
+                            </span>
+                            <span className="font-mono text-xs text-slate-500">
+                              سعر البيع: {row.salePrice} ر.س
+                            </span>
+                          </div>
+
+                          {/* Stepper with Huge Buttons */}
+                          <div className="flex items-center justify-center gap-3">
+                            <button
+                              type="button"
+                              disabled={isLocked || currentQty <= 0}
+                              onClick={() => handleStepQuantity(row.id, activeCardGroceryId, -1)}
+                              className="w-13 h-13 rounded-2xl bg-white border border-slate-300 text-slate-800 hover:bg-slate-100 flex items-center justify-center font-black text-xl shadow-xs active:scale-90 transition-transform cursor-pointer shrink-0 disabled:opacity-40"
+                              title="إنقاص واحد (-1)"
+                            >
+                              <Minus className="w-6 h-6 text-slate-700" />
+                            </button>
+
+                            {/* Center Value */}
+                            <div className="flex-1 text-center bg-white rounded-2xl py-2 px-2 border border-[#006266]/30 shadow-2xs">
+                              <span className="text-3xl font-black font-mono text-[#006266] tabular-nums block">
+                                {currentQty}
+                              </span>
+                              <span className="text-[10px] text-slate-400 font-bold block">
+                                {row.unit}
+                              </span>
+                            </div>
+
+                            <button
+                              type="button"
+                              disabled={isLocked}
+                              onClick={() => handleStepQuantity(row.id, activeCardGroceryId, 1)}
+                              className="w-13 h-13 rounded-2xl bg-[#006266] text-white hover:bg-[#004e51] flex items-center justify-center font-black text-xl shadow-xs active:scale-90 transition-transform cursor-pointer shrink-0"
+                              title="زيادة واحد (+1)"
+                            >
+                              <Plus className="w-6 h-6 text-white" />
+                            </button>
+                          </div>
+
+                          {/* Quick Increment Chips (½, ¼, +1, +2, +5, تصفير) */}
+                          <div className="grid grid-cols-4 sm:grid-cols-6 gap-1.5 mt-3 pt-2.5 border-t border-[#006266]/15">
+                            {[
+                              { label: '+¼', delta: 0.25, isDelta: true },
+                              { label: '+½', delta: 0.5, isDelta: true },
+                              { label: '+1', delta: 1.0, isDelta: true },
+                              { label: '+2', delta: 2.0, isDelta: true },
+                              { label: '+5', delta: 5.0, isDelta: true },
+                              { label: 'تصفير', delta: 0, isDelta: false },
+                            ].map((chip, cIdx) => (
+                              <button
+                                key={cIdx}
+                                type="button"
+                                disabled={isLocked}
+                                onClick={() =>
+                                  handleSetQuantity(row.id, activeCardGroceryId, chip.delta, chip.isDelta)
+                                }
+                                className={`py-1.5 px-1 rounded-xl text-xs font-black transition-all cursor-pointer text-center font-mono tabular-nums active:scale-95 ${
+                                  chip.label === 'تصفير'
+                                    ? 'bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 col-span-2 sm:col-span-1'
+                                    : 'bg-white hover:bg-[#006266] hover:text-white text-[#006266] border border-[#006266]/25 shadow-2xs'
+                                }`}
+                              >
+                                {chip.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Breakdown for other groceries in this card (compact horizontal row) */}
+                        <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-thin py-1 mb-2">
+                          {groceries.map((g) => {
+                            const q = row.quantities[g.id] || 0;
+                            const isCur = g.id === activeCardGroceryId;
+                            return (
+                              <button
+                                key={g.id}
+                                type="button"
+                                onClick={() => setActiveCardGroceryId(g.id)}
+                                className={`px-2 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 shrink-0 transition-colors ${
+                                  isCur
+                                    ? 'bg-[#006266] text-white'
+                                    : q > 0
+                                    ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                                    : 'bg-slate-100 text-slate-500'
+                                }`}
+                              >
+                                <span>{g.code}:</span>
+                                <span className="font-mono">{q}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Card Footer Actions: Duplicate (+) and Delete */}
+                      <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+                        <button
+                          type="button"
+                          onClick={() => handleDuplicateRow(row.id)}
+                          className="flex items-center gap-1 text-[#006266] hover:text-[#004e51] font-bold py-1 px-2 rounded-lg hover:bg-[#006266]/10 cursor-pointer"
+                          title="شراء نفس الصنف من مورد آخر بسعر مختلف"
+                        >
+                          <Copy className="w-3.5 h-3.5" />
+                          <span>تكرار لمورد آخر (+)</span>
+                        </button>
+
+                        {sheet.rows.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteRow(row.id)}
+                            className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 cursor-pointer"
+                            title="حذف الصنف"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            /* MODE B: TRADITIONAL FULL MATRIX TABLE (with Steppers in Cells & Horizontal Scroll) */
+            <div className="bg-white rounded-3xl shadow-xs border border-slate-200 overflow-hidden">
+              <div className="overflow-x-auto scrollbar-thin">
+                <table className="w-full text-right border-collapse text-xs sm:text-sm min-w-[950px]">
+                  <thead>
+                    <tr className="bg-[#0c2461] text-white select-none">
+                      <th className="p-3 w-10 text-center font-bold">#</th>
+                      <th className="p-3 font-bold sticky right-0 bg-[#0c2461] z-10 min-w-[130px] whitespace-nowrap">
+                        الصنف (الوحدة)
+                      </th>
+                      <th className="p-3 font-bold min-w-[160px] whitespace-nowrap">المورد</th>
+                      {/* Grocery Columns */}
+                      {groceries.map((g) => (
+                        <th
+                          key={g.id}
+                          className="p-2 text-center border-r border-[#1e3799] font-bold min-w-[95px] bg-[#0c2461]/90"
+                        >
+                          <div className="text-sm font-black text-[#f6b93b] whitespace-nowrap">
+                            {g.code}
+                          </div>
+                          <div className="text-[10px] text-slate-300 font-normal truncate max-w-[80px] mx-auto whitespace-nowrap">
+                            {g.name.replace('بقالة', '').replace('سوبرماركت', '')}
+                          </div>
+                        </th>
+                      ))}
+                      <th className="p-3 text-center font-bold bg-[#1e3799]/80 min-w-[70px] whitespace-nowrap">
+                        المجموع
+                      </th>
+                      {settings.permissions.workerCanViewPurchaseCost && (
+                        <th className="p-3 text-center font-bold min-w-[80px] whitespace-nowrap">
+                          سعر الشراء
+                        </th>
+                      )}
+                      <th className="p-3 text-center font-bold min-w-[80px] whitespace-nowrap">
+                        سعر البيع
+                      </th>
+                      <th className="p-3 text-center font-bold min-w-[110px] whitespace-nowrap">
+                        حالة الشراء
+                      </th>
+                      <th className="p-3 text-center font-bold w-16 whitespace-nowrap">إجراءات</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sheet.rows.map((row, index) => (
+                      <tr
+                        key={row.id}
+                        className={`border-b border-slate-200 ${
+                          index % 2 === 0 ? 'bg-white' : 'bg-slate-50/70'
+                        } ${row.status === 'purchased' ? 'bg-emerald-50/30' : ''}`}
+                      >
+                        <td className="p-2 text-center font-mono text-slate-400 text-xs">
+                          {index + 1}
+                        </td>
+                        <td className="p-2.5 font-bold text-slate-900 sticky right-0 bg-inherit z-10 shadow-xs border-l border-slate-200 whitespace-nowrap">
+                          <span className="text-base text-slate-900">{row.itemName}</span>{' '}
                           <span className="text-[10px] font-normal text-slate-500 bg-slate-200 px-1.5 py-0.5 rounded">
                             {row.unit}
                           </span>
-                        </div>
-                      </td>
-
-                      {/* Supplier Selection */}
-                      <td className="p-2">
-                        <select
-                          disabled={isLocked}
-                          value={row.supplierId}
-                          onChange={(e) => handleSupplierChange(row.id, e.target.value)}
-                          className="w-full text-xs p-1.5 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-[#006266] focus:outline-none truncate"
-                        >
-                          {suppliers.map((s) => (
-                            <option key={s.id} value={s.id}>
-                              {s.name}
-                            </option>
-                          ))}
-                        </select>
-                      </td>
-
-                      {/* Grocery Quantities (5 columns + dynamic ones) */}
-                      {groceries.map((g) => {
-                        const qty = row.quantities[g.id] ?? 0;
-                        const isFocused =
-                          activeCell?.rowId === row.id && activeCell?.groceryId === g.id;
-
-                        return (
-                          <td
-                            key={g.id}
-                            className={`p-1.5 text-center border-r border-slate-100 ${
-                              isFocused ? 'bg-[#006266]/10' : ''
-                            }`}
+                        </td>
+                        <td className="p-2">
+                          <select
+                            disabled={isLocked}
+                            value={row.supplierId}
+                            onChange={(e) => handleSupplierChange(row.id, e.target.value)}
+                            className="w-full text-xs p-1.5 bg-white border border-slate-200 rounded-lg focus:outline-none truncate"
                           >
-                            <input
-                              type="number"
-                              step="any"
-                              disabled={isLocked}
-                              value={qty === 0 ? '' : qty}
-                              placeholder="-"
-                              onFocus={() => setActiveCell({ rowId: row.id, groceryId: g.id })}
-                              onChange={(e) => handleQuantityChange(row.id, g.id, e.target.value)}
-                              className={`w-14 text-center py-1 px-1 text-sm font-mono font-bold rounded-lg border tabular-nums transition-all ${
-                                qty > 0
-                                  ? 'bg-amber-50/80 border-amber-300 text-slate-900'
-                                  : 'bg-white border-slate-200 text-slate-400'
-                              } focus:ring-2 focus:ring-[#006266] focus:bg-white focus:outline-none`}
-                            />
-                          </td>
-                        );
-                      })}
+                            {suppliers.map((s) => (
+                              <option key={s.id} value={s.id}>
+                                {s.name}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
 
-                      {/* Total Quantity */}
-                      <td className="p-2.5 text-center font-mono font-bold text-sm bg-slate-100/60 text-[#006266] tabular-nums">
-                        {row.totalQuantity}
-                      </td>
+                        {/* Cell with Stepper for every grocery */}
+                        {groceries.map((g) => {
+                          const qty = row.quantities[g.id] ?? 0;
+                          return (
+                            <td key={g.id} className="p-1.5 text-center border-r border-slate-100">
+                              <div className="flex items-center justify-center gap-1">
+                                <button
+                                  type="button"
+                                  disabled={isLocked || qty <= 0}
+                                  onClick={() => handleStepQuantity(row.id, g.id, -0.5)}
+                                  className="w-6 h-6 rounded bg-slate-100 text-slate-600 hover:bg-slate-200 flex items-center justify-center font-black text-xs cursor-pointer disabled:opacity-30 shrink-0"
+                                >
+                                  -
+                                </button>
+                                <span className="font-mono font-bold text-sm text-slate-900 min-w-[28px] tabular-nums">
+                                  {qty === 0 ? '-' : qty}
+                                </span>
+                                <button
+                                  type="button"
+                                  disabled={isLocked}
+                                  onClick={() => handleStepQuantity(row.id, g.id, 0.5)}
+                                  className="w-6 h-6 rounded bg-[#006266]/15 text-[#006266] hover:bg-[#006266] hover:text-white flex items-center justify-center font-black text-xs cursor-pointer shrink-0"
+                                >
+                                  +
+                                </button>
+                              </div>
+                            </td>
+                          );
+                        })}
 
-                      {/* Purchase Cost Price */}
-                      {settings.permissions.workerCanViewPurchaseCost && (
-                        <td className="p-2 text-center">
-                          {settings.permissions.workerCanEditPrices || currentRole === 'admin' ? (
-                            <input
-                              type="number"
-                              disabled={isLocked}
-                              value={row.costPrice || ''}
-                              onChange={(e) =>
-                                handlePriceChange(row.id, 'costPrice', parseFloat(e.target.value) || 0)
-                              }
-                              className="w-16 text-center py-1 text-xs font-mono font-semibold bg-white border border-slate-200 rounded-lg focus:outline-none tabular-nums"
-                            />
-                          ) : (
-                            <span className="font-mono text-xs text-slate-700 tabular-nums">
+                        <td className="p-2.5 text-center font-mono font-bold text-sm bg-slate-100/60 text-[#006266] tabular-nums whitespace-nowrap">
+                          {row.totalQuantity}
+                        </td>
+
+                        {settings.permissions.workerCanViewPurchaseCost && (
+                          <td className="p-2 text-center whitespace-nowrap">
+                            <span className="font-mono text-xs tabular-nums text-slate-700">
                               {row.costPrice} ر.س
                             </span>
-                          )}
-                        </td>
-                      )}
+                          </td>
+                        )}
 
-                      {/* Sale Price */}
-                      <td className="p-2 text-center">
-                        {settings.permissions.workerCanEditPrices || currentRole === 'admin' ? (
-                          <input
-                            type="number"
-                            disabled={isLocked}
-                            value={row.salePrice || ''}
-                            onChange={(e) =>
-                              handlePriceChange(row.id, 'salePrice', parseFloat(e.target.value) || 0)
-                            }
-                            className="w-16 text-center py-1 text-xs font-mono font-semibold bg-white border border-slate-200 rounded-lg focus:outline-none tabular-nums text-[#0c2461]"
-                          />
-                        ) : (
-                          <span className="font-mono text-xs text-[#0c2461] font-semibold tabular-nums">
+                        <td className="p-2 text-center whitespace-nowrap">
+                          <span className="font-mono text-xs tabular-nums text-[#0c2461] font-bold">
                             {row.salePrice} ر.س
                           </span>
-                        )}
-                      </td>
+                        </td>
 
-                      {/* Purchase Status Toggle Button */}
-                      <td className="p-2 text-center">
-                        <button
-                          type="button"
-                          disabled={isLocked}
-                          onClick={() => togglePurchaseStatus(row.id)}
-                          className={`w-full py-1.5 px-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1 cursor-pointer active:scale-95 ${
-                            row.status === 'purchased'
-                              ? 'bg-[#009432] text-white shadow-2xs hover:bg-[#007b29]'
-                              : 'bg-amber-100/90 text-amber-900 border border-amber-300 hover:bg-amber-200'
-                          }`}
-                        >
-                          {row.status === 'purchased' ? (
-                            <>
-                              <CheckCircle2 className="w-3.5 h-3.5" />
-                              تم الشراء
-                            </>
-                          ) : (
-                            <>
-                              <Clock className="w-3.5 h-3.5 text-amber-700" />
-                              قيد الشراء
-                            </>
-                          )}
-                        </button>
-                      </td>
-
-                      {/* Row Actions: Duplicate (+) and Delete */}
-                      <td className="p-2 text-center">
-                        <div className="flex items-center justify-center gap-1">
+                        <td className="p-2 text-center whitespace-nowrap">
                           <button
                             type="button"
-                            onClick={() => handleDuplicateRow(row.id)}
-                            className="p-1.5 text-slate-600 hover:text-white hover:bg-[#006266] rounded-lg transition-colors cursor-pointer"
-                            title="تكرار السطر لشراء نفس الصنف من مورد آخر بسعر مختلف (+)"
+                            disabled={isLocked}
+                            onClick={() => togglePurchaseStatus(row.id)}
+                            className={`w-full py-1 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1 cursor-pointer ${
+                              row.status === 'purchased'
+                                ? 'bg-[#009432] text-white'
+                                : 'bg-amber-100 text-amber-900'
+                            }`}
                           >
-                            <Copy className="w-3.5 h-3.5" />
+                            {row.status === 'purchased' ? 'تم الشراء ✅' : 'قيد الشراء ⏳'}
                           </button>
-                          {sheet.rows.length > 1 && (
+                        </td>
+
+                        <td className="p-2 text-center">
+                          <div className="flex items-center justify-center gap-1">
                             <button
                               type="button"
-                              onClick={() => handleDeleteRow(row.id)}
-                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
-                              title="حذف هذا السطر"
+                              onClick={() => handleDuplicateRow(row.id)}
+                              className="p-1 text-slate-600 hover:text-white hover:bg-[#006266] rounded cursor-pointer"
+                              title="تكرار السطر"
                             >
-                              <Trash2 className="w-3.5 h-3.5" />
+                              <Copy className="w-3.5 h-3.5" />
                             </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-
-              {/* Table Footer: Column totals for each grocery */}
-              <tfoot>
-                <tr className="bg-slate-100 font-bold border-t-2 border-[#0c2461] text-xs">
-                  <td colSpan={3} className="p-3 text-right sticky right-0 bg-slate-100 z-10">
-                    مجموع كميات البقالات:
-                  </td>
-                  {groceries.map((g) => {
-                    const colTotal = sheet.rows.reduce(
-                      (sum, r) => sum + (Number(r.quantities[g.id]) || 0),
-                      0
-                    );
-                    return (
-                      <td
-                        key={g.id}
-                        className="p-2 text-center font-mono text-sm text-[#0c2461] tabular-nums border-r border-slate-200"
-                      >
-                        {colTotal}
-                      </td>
-                    );
-                  })}
-                  <td className="p-2 text-center font-mono font-black text-sm text-[#006266] bg-[#006266]/10 tabular-nums">
-                    {totalUnits}
-                  </td>
-                  {settings.permissions.workerCanViewPurchaseCost && (
-                    <td className="p-2 text-center font-mono text-xs tabular-nums">
-                      {sheet.totalCost.toLocaleString()} ر.س
-                    </td>
-                  )}
-                  <td className="p-2 text-center font-mono text-xs tabular-nums text-[#0c2461]">
-                    {sheet.totalSale.toLocaleString()} ر.س
-                  </td>
-                  <td colSpan={2} className="p-2 text-center text-slate-500">
-                    -
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-        </div>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </>
       )}
 
-      {/* TAB 2: MORNING SORT & DISTRIBUTION (جدول فرز الصباح المستقل لكل بقالة) */}
+      {/* TAB 2: MORNING SORT & DISTRIBUTION */}
       {activeTab === 'morning_sort' && (
-        <div className="bg-white rounded-2xl shadow-xs border border-slate-200 overflow-hidden space-y-4 p-4 sm:p-6">
+        <div className="bg-white rounded-3xl shadow-xs border border-slate-200 overflow-hidden space-y-4 p-4 sm:p-6">
           <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 pb-4">
             <div>
-              <h3 className="text-base sm:text-lg font-bold text-slate-900 flex items-center gap-2">
+              <h3 className="text-base sm:text-lg font-bold text-slate-900 flex items-center gap-2 whitespace-nowrap">
                 <Truck className="w-5 h-5 text-[#006266]" />
                 جدول فرز وتوزيع الصباح المستقل لكل بقالة
               </h3>
@@ -762,9 +943,10 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
               </p>
             </div>
 
-            {/* Grocery Filter Selector */}
             <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold text-slate-600">عرض فرز بقالة:</span>
+              <span className="text-xs font-semibold text-slate-600 whitespace-nowrap">
+                عرض فرز بقالة:
+              </span>
               <select
                 value={selectedSortGrocery}
                 onChange={(e) => setSelectedSortGrocery(e.target.value)}
@@ -785,7 +967,6 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
             {groceries
               .filter((g) => selectedSortGrocery === 'all' || selectedSortGrocery === g.id)
               .map((grocery) => {
-                // Calculate this grocery's items
                 const groceryItems = sheet.rows.filter((r) => (r.quantities[grocery.id] || 0) > 0);
                 const groceryTotalQty = groceryItems.reduce(
                   (sum, r) => sum + (r.quantities[grocery.id] || 0),
@@ -802,14 +983,15 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
                     className="border border-slate-200 rounded-2xl overflow-hidden shadow-2xs bg-slate-50/50 flex flex-col justify-between"
                   >
                     <div>
-                      {/* Card Header */}
                       <div className="bg-[#0c2461] text-white p-3.5 flex items-center justify-between">
                         <div className="flex items-center gap-2.5">
                           <span className="w-8 h-8 rounded-lg bg-[#f6b93b] text-[#0c2461] font-black text-sm flex items-center justify-center">
                             {grocery.code}
                           </span>
                           <div>
-                            <h4 className="font-bold text-sm text-white">{grocery.name}</h4>
+                            <h4 className="font-bold text-sm text-white whitespace-nowrap">
+                              {grocery.name}
+                            </h4>
                             <span className="text-[11px] text-slate-300">{grocery.ownerName}</span>
                           </div>
                         </div>
@@ -822,7 +1004,6 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
                         </div>
                       </div>
 
-                      {/* Items List */}
                       <div className="p-3">
                         {groceryItems.length === 0 ? (
                           <div className="text-center py-6 text-xs text-slate-400">
@@ -832,11 +1013,11 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
                           <table className="w-full text-right text-xs">
                             <thead>
                               <tr className="border-b border-slate-200 text-slate-500">
-                                <th className="pb-2">الصنف</th>
-                                <th className="pb-2 text-center">الكمية المقررة</th>
-                                <th className="pb-2 text-center">سعر الوحدة</th>
-                                <th className="pb-2 text-center">الإجمالي</th>
-                                <th className="pb-2 text-center">الاستلام</th>
+                                <th className="pb-2 whitespace-nowrap">الصنف</th>
+                                <th className="pb-2 text-center whitespace-nowrap">الكمية المقررة</th>
+                                <th className="pb-2 text-center whitespace-nowrap">سعر الوحدة</th>
+                                <th className="pb-2 text-center whitespace-nowrap">الإجمالي</th>
+                                <th className="pb-2 text-center whitespace-nowrap">الاستلام</th>
                               </tr>
                             </thead>
                             <tbody>
@@ -851,7 +1032,7 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
                                       isDelivered ? 'bg-emerald-50/50' : ''
                                     }`}
                                   >
-                                    <td className="py-2 font-bold text-slate-800">
+                                    <td className="py-2 font-bold text-slate-800 whitespace-nowrap">
                                       {r.itemName}{' '}
                                       <span className="text-[10px] text-slate-500 font-normal">
                                         ({r.unit})
@@ -870,7 +1051,7 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
                                       <button
                                         type="button"
                                         onClick={() => toggleDeliveryConfirm(r.id, grocery.id)}
-                                        className={`px-2 py-0.5 rounded-md text-[11px] font-bold cursor-pointer transition-colors ${
+                                        className={`px-2 py-0.5 rounded-md text-[11px] font-bold cursor-pointer transition-colors whitespace-nowrap ${
                                           isDelivered
                                             ? 'bg-[#009432] text-white'
                                             : 'bg-slate-200 text-slate-600 hover:bg-slate-300'
@@ -888,13 +1069,12 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
                       </div>
                     </div>
 
-                    {/* Footer summary per grocery */}
                     <div className="bg-white p-3 border-t border-slate-200 flex items-center justify-between text-xs">
-                      <div className="text-slate-600">
+                      <div className="text-slate-600 whitespace-nowrap">
                         إجمالي العبوات:{' '}
                         <span className="font-bold font-mono text-[#006266]">{groceryTotalQty}</span>
                       </div>
-                      <div className="text-slate-600">
+                      <div className="text-slate-600 whitespace-nowrap">
                         الرصيد السابق:{' '}
                         <span className="font-bold font-mono text-slate-800 tabular-nums">
                           {grocery.balance.toLocaleString()} ر.س

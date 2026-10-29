@@ -1,104 +1,83 @@
 import { Grocery, Supplier, VegetableItem, DailySheet, Voucher, AuditLog, SystemSettings, DailyOrderRow } from '../types';
 
 const STORAGE_KEYS = {
-  GROCERIES: 'veg_app_groceries_v1',
-  SUPPLIERS: 'veg_app_suppliers_v1',
-  ITEMS: 'veg_app_items_v1',
-  DAILY_SHEETS: 'veg_app_daily_sheets_v1',
-  VOUCHERS: 'veg_app_vouchers_v1',
-  AUDIT_LOGS: 'veg_app_audit_logs_v1',
-  SETTINGS: 'veg_app_settings_v1',
+  GROCERIES: 'veg_app_groceries_clean_v2',
+  SUPPLIERS: 'veg_app_suppliers_clean_v2',
+  ITEMS: 'veg_app_items_clean_v2',
+  DAILY_SHEETS: 'veg_app_daily_sheets_clean_v2',
+  VOUCHERS: 'veg_app_vouchers_clean_v2',
+  AUDIT_LOGS: 'veg_app_audit_logs_clean_v2',
+  SETTINGS: 'veg_app_settings_clean_v2',
 };
 
+// 5 Core Groceries in Yemen with +967 numbers
 export const INITIAL_GROCERIES: Grocery[] = [
-  { id: 'g1', code: 'ص', name: 'بقالة الصلاح النموذجية', ownerName: 'صلاح العماري', phone: '0501234561', balance: 1450, creditLimit: 5000, pin: '1111', active: true },
-  { id: 'g2', code: 'ح', name: 'سوبرماركت الحرمين', ownerName: 'عبدالله الحرمي', phone: '0501234562', balance: 2800, creditLimit: 7000, pin: '2222', active: true },
-  { id: 'g3', code: 'س', name: 'مجمع السعيد للتموينات', ownerName: 'سعيد باوزير', phone: '0501234563', balance: 950, creditLimit: 4000, pin: '3333', active: true },
-  { id: 'g4', code: 'ع', name: 'بقالة العاصمة الحديثة', ownerName: 'علي النهدي', phone: '0501234564', balance: 3200, creditLimit: 6000, pin: '4444', active: true },
-  { id: 'g5', code: 'ك', name: 'تموينات الكوثر المركزية', ownerName: 'كمال الصبري', phone: '0501234565', balance: 1780, creditLimit: 5000, pin: '5555', active: true },
+  { id: 'g1', code: 'ص', name: 'بقالة الصلاح النموذجية', ownerName: 'صلاح العماري', phone: '773456789', balance: 0, creditLimit: 500000, pin: '1111', active: true },
+  { id: 'g2', code: 'ح', name: 'سوبرماركت الحرمين', ownerName: 'عبدالله الحرمي', phone: '774567890', balance: 0, creditLimit: 700000, pin: '2222', active: true },
+  { id: 'g3', code: 'س', name: 'مجمع السعيد للتموينات', ownerName: 'سعيد باوزير', phone: '775678901', balance: 0, creditLimit: 400000, pin: '3333', active: true },
+  { id: 'g4', code: 'ع', name: 'بقالة العاصمة الحديثة', ownerName: 'علي النهدي', phone: '776789012', balance: 0, creditLimit: 600000, pin: '4444', active: true },
+  { id: 'g5', code: 'ك', name: 'تموينات الكوثر المركزية', ownerName: 'كمال الصبري', phone: '777890123', balance: 0, creditLimit: 500000, pin: '5555', active: true },
 ];
 
+// Suppliers in Yemen wholesale vegetable market
 export const INITIAL_SUPPLIERS: Supplier[] = [
-  { id: 's1', name: 'شركة مزارع الوادي الأخضر', phone: '0559876541', specialty: 'طماط، خيار، بيبار محمي', balance: 4500, active: true },
-  { id: 's2', name: 'سوق الجملة المركزي (أبو رشيد)', phone: '0559876542', specialty: 'بصل، بطاط، ثوم بلدي', balance: 3800, active: true },
-  { id: 's3', name: 'مزارع السهل الذهبي', phone: '0559876543', specialty: 'كوسه، باميه، باذنجان أسود', balance: 1900, active: true },
-  { id: 's4', name: 'مؤسسة البركة لتوريد الليم والفواكه', phone: '0559876544', specialty: 'ليمون، حمضيات، جزر', balance: 2200, active: true },
+  { id: 's1', name: 'مزارع الوادي الأخضر (طماط وخيار)', phone: '771122334', specialty: 'طماط، خيار، بيبار محمي', balance: 0, active: true },
+  { id: 's2', name: 'سوق الجملة المركزي (أبو رشيد)', phone: '772233445', specialty: 'بصل، بطاط، ثوم بلدي', balance: 0, active: true },
+  { id: 's3', name: 'مزارع السهل الذهبي', phone: '773344556', specialty: 'كوسه، باميه، باذنجان أسود', balance: 0, active: true },
+  { id: 's4', name: 'مؤسسة البركة لاستيراد وتوريد الفواكه', phone: '774455667', specialty: 'ليمون، حمضيات، جزر', balance: 0, active: true },
 ];
 
+// The 10 Core Vegetable items
 export const INITIAL_ITEMS: VegetableItem[] = [
-  { id: 'item_1', name: 'طماط', unit: 'سلة', defaultCostPrice: 35, defaultSalePrice: 42 },
-  { id: 'item_2', name: 'بطاط', unit: 'شوال', defaultCostPrice: 60, defaultSalePrice: 72 },
-  { id: 'item_3', name: 'بصل', unit: 'شوال', defaultCostPrice: 45, defaultSalePrice: 55 },
-  { id: 'item_4', name: 'جزر', unit: 'كرتون', defaultCostPrice: 30, defaultSalePrice: 38 },
-  { id: 'item_5', name: 'بيبار', unit: 'كرتون', defaultCostPrice: 50, defaultSalePrice: 62 },
-  { id: 'item_6', name: 'باميه', unit: 'سلة', defaultCostPrice: 70, defaultSalePrice: 85 },
-  { id: 'item_7', name: 'كوسه', unit: 'سلة', defaultCostPrice: 40, defaultSalePrice: 50 },
-  { id: 'item_8', name: 'اسود', unit: 'سلة', defaultCostPrice: 35, defaultSalePrice: 44 },
-  { id: 'item_9', name: 'ليم', unit: 'كرتون', defaultCostPrice: 55, defaultSalePrice: 68 },
-  { id: 'item_10', name: 'خيار', unit: 'كرتون', defaultCostPrice: 28, defaultSalePrice: 35 },
+  { id: 'item_1', name: 'طماط', unit: 'سلة', defaultCostPrice: 3500, defaultSalePrice: 4200 },
+  { id: 'item_2', name: 'بطاط', unit: 'شوال', defaultCostPrice: 6000, defaultSalePrice: 7200 },
+  { id: 'item_3', name: 'بصل', unit: 'شوال', defaultCostPrice: 4500, defaultSalePrice: 5500 },
+  { id: 'item_4', name: 'جزر', unit: 'كرتون', defaultCostPrice: 3000, defaultSalePrice: 3800 },
+  { id: 'item_5', name: 'بيبار', unit: 'كرتون', defaultCostPrice: 5000, defaultSalePrice: 6200 },
+  { id: 'item_6', name: 'باميه', unit: 'سلة', defaultCostPrice: 7000, defaultSalePrice: 8500 },
+  { id: 'item_7', name: 'كوسه', unit: 'سلة', defaultCostPrice: 4000, defaultSalePrice: 5000 },
+  { id: 'item_8', name: 'اسود', unit: 'سلة', defaultCostPrice: 3500, defaultSalePrice: 4400 },
+  { id: 'item_9', name: 'ليم', unit: 'كرتون', defaultCostPrice: 5500, defaultSalePrice: 6800 },
+  { id: 'item_10', name: 'خيار', unit: 'كرتون', defaultCostPrice: 2800, defaultSalePrice: 3500 },
 ];
 
+// Clean Production System Settings for Younis Al-Afif & Mohannad Al-Ahmadi
 export const INITIAL_SETTINGS: SystemSettings = {
-  businessName: 'مؤسسة النخبة لتوريد وتوزيع الخضروات والفواكه',
-  businessSubname: 'النظام المحاسبي والرقابي المركزي لمشتريات الجملة وتوزيع البقالات',
-  phone: '0550001122 - 0114002233',
-  taxOrRegNumber: 'س.ت: 1010894523 | ر.ض: 300192837400003',
-  address: 'سوق الجملة المركزي للخضار والفواكه - قطاع التوزيع رقم 4',
+  businessName: 'مؤسسة العفيف والأحمدي لتوريد وتوزيع الخضروات والفواكه',
+  businessSubname: 'النظام المحاسبي والرقابي لمشتريات وتوزيع سوق الجملة والبقالات',
+  phone: '772317950 - 772178969',
+  countryCode: '+967',
+  taxOrRegNumber: 'س.ت: 894523 | ترخيص سوق الجملة رقم 104',
+  address: 'اليمن - سوق الجملة المركزي للخضار والفواكه',
   invoiceNotes: 'البضاعة المباعة خاضعة للمعاينة والتسليم الصباحي المباشر. يرجى توثيق أي ملاحظة فور الاستلام.',
-  invoiceFooter: 'شاكرين حسن تعاملكم - للاستفسارات المحاسبية يرجى مراجعة إدارة الحسابات',
+  invoiceFooter: 'شاكرين حسن تعاملكم - إدارة المشتريات والتوزيع / يونس العفيف (772317950) · مهند الأحمدي (772178969)',
   permissions: {
-    workerCanAddSupplier: true,
-    workerCanAddItem: true,
-    workerCanEditPrices: true,
-    workerCanViewPurchaseCost: true,
-    lockDailySheetAfterSave: false,
+    workerCanAddSupplier: false,
+    workerCanAddItem: false,
+    workerCanEditPrices: false,
+    workerCanViewPurchaseCost: false,
+    lockDailySheetAfterSave: true,
   },
 };
 
-// Helper to get formatted Arabic day name
 export function getArabicDayName(dateString: string): string {
   const days = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
   const d = new Date(dateString + 'T12:00:00');
   return days[d.getDay()] || 'اليوم';
 }
 
-// Generate realistic default rows for a date
-export function generateDefaultRows(items: VegetableItem[], suppliers: Supplier[], groceries: Grocery[], dateStr: string): DailyOrderRow[] {
+// Generate clean fresh rows with 0 initial quantity for a new day
+export function generateCleanRows(items: VegetableItem[], suppliers: Supplier[], groceries: Grocery[], dateStr: string): DailyOrderRow[] {
   return items.map((item, index) => {
-    // Pick supplier based on item category
     let supplier = suppliers[0];
     if (['بصل', 'بطاط'].includes(item.name)) supplier = suppliers[1] || suppliers[0];
     else if (['كوسه', 'باميه', 'اسود'].includes(item.name)) supplier = suppliers[2] || suppliers[0];
     else if (['ليم', 'جزر'].includes(item.name)) supplier = suppliers[3] || suppliers[0];
 
     const quantities: Record<string, number> = {};
-    let totalQty = 0;
-
-    // Realistic initial seed quantities for default groceries
-    const sampleQtyPatterns: Record<string, number[]> = {
-      طماط: [2.5, 3, 1.5, 2, 4],
-      بطاط: [3, 4, 2, 3, 5],
-      بصل: [2, 3, 1, 2, 3],
-      جزر: [1, 1.5, 1, 0.5, 2],
-      بيبار: [1.5, 1, 0.5, 1, 1.5],
-      باميه: [0.5, 1, 0.5, 0.5, 1],
-      كوسه: [1, 1.5, 1, 1, 2],
-      اسود: [1, 1, 0.5, 1, 1.5],
-      ليم: [0.5, 1, 0.5, 0.5, 1],
-      خيار: [2, 2.5, 1.5, 2, 3],
-    };
-
-    const pattern = sampleQtyPatterns[item.name] || [1, 1, 1, 1, 1];
-    groceries.forEach((g, gIdx) => {
-      const q = pattern[gIdx % pattern.length];
-      quantities[g.id] = q;
-      totalQty += q;
+    groceries.forEach((g) => {
+      quantities[g.id] = 0;
     });
-
-    const costPrice = item.defaultCostPrice;
-    const salePrice = item.defaultSalePrice;
-    const totalCost = totalQty * costPrice;
-    const totalSale = totalQty * salePrice;
 
     return {
       id: `row_${dateStr}_${item.id}_${index}`,
@@ -107,182 +86,65 @@ export function generateDefaultRows(items: VegetableItem[], suppliers: Supplier[
       unit: item.unit,
       supplierId: supplier.id,
       supplierName: supplier.name,
-      costPrice,
-      salePrice,
+      costPrice: item.defaultCostPrice,
+      salePrice: item.defaultSalePrice,
       quantities,
-      totalQuantity: totalQty,
-      totalCost,
-      totalSale,
-      profit: totalSale - totalCost,
-      status: index < 5 ? 'purchased' : 'pending',
+      totalQuantity: 0,
+      totalCost: 0,
+      totalSale: 0,
+      profit: 0,
+      status: 'pending',
       notes: '',
       morningSorted: groceries.reduce((acc, g) => {
-        const q = quantities[g.id] || 0;
-        acc[g.id] = { deliveredQty: q, confirmed: index < 4 };
+        acc[g.id] = { deliveredQty: 0, confirmed: false };
         return acc;
       }, {} as Record<string, { deliveredQty: number; confirmed: boolean }>),
     };
   });
 }
 
-// Generate initial sample daily sheets (Today and past 3 days)
+// Clean production daily sheets - starts fresh with today's sheet
 export function getInitialDailySheets(): DailySheet[] {
-  const today = new Date();
-  const sheets: DailySheet[] = [];
+  const todayStr = new Date().toISOString().split('T')[0];
+  const dayName = getArabicDayName(todayStr);
 
-  for (let i = 0; i < 4; i++) {
-    const d = new Date(today);
-    d.setDate(today.getDate() - i);
-    const dateStr = d.toISOString().split('T')[0];
-    const dayName = getArabicDayName(dateStr);
+  const cleanRows = generateCleanRows(INITIAL_ITEMS, INITIAL_SUPPLIERS, INITIAL_GROCERIES, todayStr);
 
-    const rows = generateDefaultRows(INITIAL_ITEMS, INITIAL_SUPPLIERS, INITIAL_GROCERIES, dateStr);
-    const totalCost = rows.reduce((sum, r) => sum + r.totalCost, 0);
-    const totalSale = rows.reduce((sum, r) => sum + r.totalSale, 0);
-    const totalProfit = totalSale - totalCost;
-
-    sheets.push({
-      id: `sheet_${dateStr}`,
-      date: dateStr,
+  return [
+    {
+      id: `sheet_${todayStr}`,
+      date: todayStr,
       dayName,
-      status: i === 0 ? 'open' : 'settled',
-      rows,
-      totalCost,
-      totalSale,
-      totalProfit,
-      notes: i === 0 ? 'مشتريات اليوم قيد التجميع والمتابعة الميدانية' : `تم إقفال كشف ${dayName} وتوريد الصباح وتسوية الحسابات.`,
-      nightOrdersSaved: true,
-      morningSortGenerated: true,
-      createdAt: `${dateStr} 21:30:00`,
-      updatedAt: `${dateStr} 23:45:00`,
-    });
-  }
-
-  return sheets;
+      status: 'open',
+      rows: cleanRows,
+      totalCost: 0,
+      totalSale: 0,
+      totalProfit: 0,
+      notes: 'كشف اليومية الافتتاحي - جاهز لتسجيل طلبات الليل والمشتريات الميدانية',
+      nightOrdersSaved: false,
+      morningSortGenerated: false,
+      createdAt: `${todayStr} 00:00:00`,
+      updatedAt: `${todayStr} 00:00:00`,
+    },
+  ];
 }
 
-export const INITIAL_VOUCHERS: Voucher[] = [
-  {
-    id: 'v_rec_1',
-    voucherNumber: 'سند-قبض-101',
-    type: 'receipt',
-    date: new Date(Date.now() - 86400000 * 2).toISOString().split('T')[0],
-    partyType: 'grocery',
-    partyId: 'g1',
-    partyName: 'بقالة الصلاح النموذجية',
-    partyCode: 'ص',
-    amount: 1500,
-    paymentMethod: 'cash',
-    referenceNumber: 'CASH-9821',
-    notes: 'دفعة سداد حساب مسحوبات الأسبوع الماضي',
-    createdBy: 'مدير الحسابات',
-    createdAt: '2026-10-27 10:15:00',
-  },
-  {
-    id: 'v_rec_2',
-    voucherNumber: 'سند-قبض-102',
-    type: 'receipt',
-    date: new Date(Date.now() - 86400000).toISOString().split('T')[0],
-    partyType: 'grocery',
-    partyId: 'g2',
-    partyName: 'سوبرماركت الحرمين',
-    partyCode: 'ح',
-    amount: 3000,
-    paymentMethod: 'transfer',
-    referenceNumber: 'TRX-77401',
-    notes: 'تحويل بنكي - دفعة من الرصيد السابق',
-    createdBy: 'مدير الحسابات',
-    createdAt: '2026-10-28 14:30:00',
-  },
-  {
-    id: 'v_pay_1',
-    voucherNumber: 'سند-صرف-201',
-    type: 'payment',
-    date: new Date(Date.now() - 86400000 * 2).toISOString().split('T')[0],
-    partyType: 'supplier',
-    partyId: 's1',
-    partyName: 'شركة مزارع الوادي الأخضر',
-    amount: 2500,
-    paymentMethod: 'transfer',
-    referenceNumber: 'AL-INMA-4491',
-    notes: 'سداد جزئي لفاتورة توريد الطماط والخيار',
-    createdBy: 'مدير الحسابات',
-    createdAt: '2026-10-27 11:45:00',
-  },
-  {
-    id: 'v_pay_2',
-    voucherNumber: 'سند-صرف-202',
-    type: 'payment',
-    date: new Date(Date.now() - 86400000).toISOString().split('T')[0],
-    partyType: 'supplier',
-    partyId: 's2',
-    partyName: 'سوق الجملة المركزي (أبو رشيد)',
-    amount: 2000,
-    paymentMethod: 'cash',
-    referenceNumber: 'CASH-3312',
-    notes: 'سداد نقدي لتوريد شحنة البطاط والبصل',
-    createdBy: 'أمين الصندوق',
-    createdAt: '2026-10-28 17:20:00',
-  },
-];
+// Clean vouchers (empty by default for real operations)
+export const INITIAL_VOUCHERS: Voucher[] = [];
 
+// Clean initial audit log with system initialization
 export const INITIAL_AUDIT_LOGS: AuditLog[] = [
   {
-    id: 'log_1',
-    timestamp: '2026-10-29 02:15:30',
-    user: 'عامل الميدان (أبو فهد)',
-    role: 'worker',
-    action: 'حفظ طلبات الليل وتوليد فرز الصباح',
-    target: 'كشف اليومية 2026-10-29',
-    details: 'تم تثبيت 10 أصناف لـ 5 بقالات بإجمالي 82 وحدة وتوليد كشوف الفرز التلقائية',
-  },
-  {
-    id: 'log_2',
-    timestamp: '2026-10-29 01:45:12',
-    user: 'عامل الميدان (أبو فهد)',
-    role: 'worker',
-    action: 'تأكيد شراء صنف',
-    target: 'طماط - شركة مزارع الوادي الأخضر',
-    oldValue: 'قيد الشراء ⏳',
-    newValue: 'تم الشراء ✅',
-    details: 'تم تأكيد استلام وشراء 13 سلة طماط بسعر 35 ريال',
-  },
-  {
-    id: 'log_3',
-    timestamp: '2026-10-28 14:32:00',
-    user: 'مدير النظام (أحمد)',
+    id: 'log_init',
+    timestamp: new Date().toLocaleDateString('en-CA') + ' ' + new Date().toTimeString().split(' ')[0],
+    user: 'يونس العفيف (مدير النظام)',
     role: 'admin',
-    action: 'تسجيل سند قبض',
-    target: 'سوبرماركت الحرمين (ح)',
-    oldValue: 'الرصيد: 5,800 ريال',
-    newValue: 'الرصيد: 2,800 ريال',
-    details: 'سند رقم سند-قبض-102 بمبلغ 3,000 ريال عبر تحويل بنكي',
-  },
-  {
-    id: 'log_4',
-    timestamp: '2026-10-28 11:20:45',
-    user: 'مدير النظام (أحمد)',
-    role: 'admin',
-    action: 'تعديل شامل لليوم',
-    target: 'كشف تاريخ 2026-10-27',
-    oldValue: 'إجمالي الشراء: 3,420 ريال',
-    newValue: 'إجمالي الشراء: 3,680 ريال',
-    details: 'تعديل كمية البطاط للبقالة (س) وإعادة ترحيل الحسابات دون تغيير التاريخ الأصلي',
-  },
-  {
-    id: 'log_5',
-    timestamp: '2026-10-27 19:10:05',
-    user: 'مدير النظام (أحمد)',
-    role: 'admin',
-    action: 'تعديل صلاحيات العامل',
-    target: 'إعدادات النظام',
-    oldValue: 'تعديل الأسعار: مقفل',
-    newValue: 'تعديل الأسعار: مسموح',
-    details: 'منح العامل صلاحية تعديل أسعار الشراء وفق حركة سوق الخضار المفاجئة',
+    action: 'تهيئة النظام للإنتاج الفعلي',
+    target: 'قاعدة بيانات النظام',
+    details: 'تم تعيين يونس العفيف مديراً رئيسياً للنظام وإعداد كشف اليومية النظيف',
   },
 ];
 
-// LocalStorage helpers with error resilience
 export function loadFromStorage<T>(key: string, defaultValue: T): T {
   try {
     const raw = localStorage.getItem(key);
@@ -302,7 +164,6 @@ export function saveToStorage<T>(key: string, value: T): void {
   }
 }
 
-// Storage API
 export const StorageService = {
   getGroceries(): Grocery[] {
     return loadFromStorage(STORAGE_KEYS.GROCERIES, INITIAL_GROCERIES);
@@ -354,7 +215,7 @@ export const StorageService = {
       id: 'log_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
       timestamp: timeStr,
     };
-    const updated = [newEntry, ...current].slice(0, 300); // keep last 300 entries
+    const updated = [newEntry, ...current].slice(0, 300);
     this.saveAuditLogs(updated);
   },
 
