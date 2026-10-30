@@ -441,6 +441,15 @@ export default function App() {
               setIsPrintModalOpen(true);
             }}
             onAddAuditLog={logAudit}
+            onUpdateItemPrice={(itemId, costPrice, salePrice) => {
+              setItems((prev) =>
+                prev.map((it) =>
+                  it.id === itemId
+                    ? { ...it, defaultCostPrice: costPrice, defaultSalePrice: salePrice }
+                    : it
+                )
+              );
+            }}
           />
         )}
 
@@ -495,6 +504,8 @@ export default function App() {
             groceries={groceries}
             suppliers={suppliers}
             auditLogs={auditLogs}
+            currentTheme={currentTheme}
+            onThemeChange={setCurrentTheme}
             onUpdateSettings={setSettings}
             onAddGrocery={handleAddGrocery}
             onUpdateGrocery={handleUpdateGrocery}

@@ -5,8 +5,10 @@ import {
   Supplier,
   AuditLog,
   UserAccount,
+  ThemeId,
 } from '../types';
 import { AuthService } from '../services/auth';
+import { THEMES } from './ThemeSwitcher';
 import {
   Settings,
   Shield,
@@ -27,6 +29,8 @@ import {
   Database,
   ExternalLink,
   Copy,
+  Palette,
+  Sparkles,
 } from 'lucide-react';
 
 interface AdminSettingsViewProps {
@@ -34,6 +38,8 @@ interface AdminSettingsViewProps {
   groceries: Grocery[];
   suppliers: Supplier[];
   auditLogs: AuditLog[];
+  currentTheme?: ThemeId;
+  onThemeChange?: (theme: ThemeId) => void;
   onUpdateSettings: (settings: SystemSettings) => void;
   onAddGrocery: (grocery: Omit<Grocery, 'id' | 'balance' | 'active'>) => void;
   onUpdateGrocery: (grocery: Grocery) => void;
@@ -48,6 +54,8 @@ export const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
   groceries,
   suppliers,
   auditLogs,
+  currentTheme = 'royal_navy',
+  onThemeChange,
   onUpdateSettings,
   onAddGrocery,
   onUpdateGrocery,
@@ -56,9 +64,9 @@ export const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
   onUpdateSupplier,
   onResetData,
 }) => {
-  // Tabs: 'users' | 'permissions' | 'groceries' | 'suppliers' | 'invoice_header' | 'audit_log' | 'supabase'
+  // Tabs: 'users' | 'permissions' | 'groceries' | 'suppliers' | 'invoice_header' | 'themes' | 'audit_log' | 'supabase'
   const [activeTab, setActiveTab] = useState<
-    'users' | 'permissions' | 'groceries' | 'suppliers' | 'invoice_header' | 'audit_log' | 'supabase'
+    'users' | 'permissions' | 'groceries' | 'suppliers' | 'invoice_header' | 'themes' | 'audit_log' | 'supabase'
   >('users');
 
   // User Accounts State
@@ -257,6 +265,18 @@ export const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
           >
             <FileText className="w-4 h-4 text-[#f6b93b]" />
             ترويسة الفاتورة
+          </button>
+
+          <button
+            onClick={() => setActiveTab('themes')}
+            className={`flex items-center gap-1.5 px-4 py-2 text-xs sm:text-sm font-bold rounded-xl transition-colors cursor-pointer whitespace-nowrap ${
+              activeTab === 'themes'
+                ? 'bg-[#0c2461] text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+            }`}
+          >
+            <Palette className="w-4 h-4 text-[#f6b93b]" />
+            ثيمات وألوان النظام
           </button>
 
           <button
@@ -1053,6 +1073,134 @@ VITE_SUPABASE_ANON_KEY="sb_publishable_DesBAjmOQwAYOtcKggQwFQ__vkAjme5"`}
               </button>
             </div>
           </form>
+        )}
+
+        {/* TAB 6: THEMES & SYSTEM STYLING (Accessible only in Settings) */}
+        {activeTab === 'themes' && (
+          <div className="p-6 space-y-6">
+            <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 pb-4">
+              <div>
+                <h3 className="text-base sm:text-lg font-bold text-slate-900 flex items-center gap-2">
+                  <Palette className="w-5 h-5 text-[#f6b93b]" />
+                  تخصيص ثيم وألوان النظام (خاص بالإعدادات)
+                </h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  اختر الهوية اللونية المعتمدة للمؤسسة ولوحة التحكم وشاشات العمال والبقالات. يتم الحفظ فوراً على الجهاز.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 text-xs font-bold text-slate-700 bg-slate-100 px-3 py-1.5 rounded-xl">
+                <span>الثيم الحالي:</span>
+                <span className="text-[#0c2461] font-black">
+                  {THEMES.find((t) => t.id === currentTheme)?.name || currentTheme}
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {THEMES.map((theme) => {
+                const isSelected = currentTheme === theme.id;
+                return (
+                  <div
+                    key={theme.id}
+                    onClick={() => onThemeChange && onThemeChange(theme.id)}
+                    className={`rounded-3xl border-2 p-5 transition-all cursor-pointer relative overflow-hidden flex flex-col justify-between shadow-xs hover:shadow-md ${
+                      isSelected
+                        ? 'border-amber-500 ring-2 ring-amber-400/40 bg-amber-50/20 shadow-md'
+                        : 'border-slate-200 bg-white hover:border-slate-300'
+                    }`}
+                  >
+                    <div>
+                      {/* Header with name and tag */}
+                      <div className="flex items-center justify-between gap-2 mb-3">
+                        <div className="flex items-center gap-2">
+                          <span
+                            className="w-4 h-4 rounded-full border border-black/20"
+                            style={{ backgroundColor: theme.primary }}
+                          />
+                          <h4 className="font-black text-sm text-slate-900">{theme.name}</h4>
+                        </div>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+                          {theme.tag}
+                        </span>
+                      </div>
+
+                      {/* Visual Color Palette Swatches */}
+                      <div className="space-y-2 mb-4">
+                        <div className="text-[11px] text-slate-500 font-semibold">لوحة الألوان:</div>
+                        <div className="grid grid-cols-3 gap-2">
+                          <div
+                            className="h-10 rounded-xl flex items-center justify-center text-[10px] font-bold text-white shadow-2xs"
+                            style={{ backgroundColor: theme.primary }}
+                          >
+                            رئيسي
+                          </div>
+                          <div
+                            className="h-10 rounded-xl flex items-center justify-center text-[10px] font-bold text-white shadow-2xs"
+                            style={{ backgroundColor: theme.secondary }}
+                          >
+                            ثانوي
+                          </div>
+                          <div
+                            className="h-10 rounded-xl flex items-center justify-center text-[10px] font-bold text-slate-950 shadow-2xs"
+                            style={{ backgroundColor: theme.accent }}
+                          >
+                            تمييز
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Mockup card preview */}
+                      <div
+                        className="rounded-2xl p-3 border text-xs space-y-1.5 mb-4"
+                        style={{
+                          backgroundColor: theme.bgPreview,
+                          borderColor: theme.secondary + '40',
+                          color: theme.isDark ? '#f8fafc' : '#0f172a',
+                        }}
+                      >
+                        <div
+                          className="px-2 py-1 rounded-lg text-[10px] font-black inline-block"
+                          style={{ backgroundColor: theme.primary, color: '#ffffff' }}
+                        >
+                          معاينة الواجهة
+                        </div>
+                        <p className="text-[11px] font-medium opacity-80">
+                          مظهر أزرار وجداول الفواتير والتقارير
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Action button */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onThemeChange && onThemeChange(theme.id);
+                      }}
+                      className={`w-full py-2.5 px-4 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs ${
+                        isSelected
+                          ? 'bg-amber-500 text-slate-950 font-black'
+                          : 'bg-slate-100 hover:bg-slate-200 text-slate-800'
+                      }`}
+                    >
+                      {isSelected ? (
+                        <>
+                          <Check className="w-4 h-4 stroke-[3]" />
+                          <span>الثيم المفعّل حالياً</span>
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="w-4 h-4 text-amber-500" />
+                          <span>تطبيق هذا الثيم</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         )}
 
         {/* TAB 7: AUDIT LOG */}

@@ -39,6 +39,7 @@ interface WorkerViewProps {
   onOpenAddSupplier: () => void;
   onOpenPrintModal: (type: 'daily_invoice' | 'morning_sort') => void;
   onAddAuditLog: (action: string, target: string, oldVal?: string, newVal?: string, details?: string) => void;
+  onUpdateItemPrice?: (itemId: string, costPrice: number, salePrice: number) => void;
 }
 
 export const WorkerView: React.FC<WorkerViewProps> = ({
@@ -53,11 +54,12 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
   onOpenAddSupplier,
   onOpenPrintModal,
   onAddAuditLog,
+  onUpdateItemPrice,
 }) => {
   // Tabs: 'night_orders' (طلبات الليل والشراء) vs 'morning_sort' (فرز وتوزيع الصباح)
   const [activeTab, setActiveTab] = useState<'night_orders' | 'morning_sort'>('night_orders');
-  // View mode for night orders: 'cards' (Mobile-First Touch Cards) vs 'table' (Traditional Grid)
-  const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
+  // View mode for night orders: 'table' (Default Matrix Grid) vs 'cards' (Secondary Touch Cards)
+  const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
   // Selected grocery for the mobile cards stepper
   const [activeCardGroceryId, setActiveCardGroceryId] = useState<string>(groceries[0]?.id || '');
   // Selected grocery filter for morning sort view
@@ -139,8 +141,9 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
     recalculateAndSave(updatedRows);
   };
 
-  // Price changes (if permitted)
+  // Price changes directly from the table or cards
   const handlePriceChange = (rowId: string, field: 'costPrice' | 'salePrice', val: number) => {
+    const targetRow = sheet.rows.find((r) => r.id === rowId);
     const updatedRows = sheet.rows.map((row) => {
       if (row.id !== rowId) return row;
       const costPrice = field === 'costPrice' ? Math.max(0, val) : row.costPrice;
@@ -158,7 +161,48 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
       };
     });
 
+    if (targetRow && onUpdateItemPrice) {
+      const newCost = field === 'costPrice' ? Math.max(0, val) : targetRow.costPrice;
+      const newSale = field === 'salePrice' ? Math.max(0, val) : targetRow.salePrice;
+      onUpdateItemPrice(targetRow.itemId, newCost, newSale);
+    }
+
     recalculateAndSave(updatedRows);
+  };
+
+  // Add existing product from catalog to current sheet
+  const handleAddProductToSheet = (itemId: string) => {
+    const item = items.find((it) => it.id === itemId);
+    if (!item) return;
+
+    const existingRow = sheet.rows.find((r) => r.itemId === item.id || r.itemName === item.name);
+    if (existingRow) {
+      alert(`الصنف "${item.name}" مضاف بالفعل في كشف اليومية! يمكنك تعديل كمياته وسعره مباشرة.`);
+      return;
+    }
+
+    const newRow: DailyOrderRow = {
+      id: `row_${sheet.date}_${item.id}_${Date.now()}`,
+      itemId: item.id,
+      itemName: item.name,
+      unit: item.unit,
+      supplierId: suppliers[0]?.id || '',
+      supplierName: suppliers[0]?.name || 'مورد عام',
+      costPrice: item.defaultCostPrice,
+      salePrice: item.defaultSalePrice,
+      quantities: groceries.reduce((acc, g) => {
+        acc[g.id] = 0;
+        return acc;
+      }, {} as Record<string, number>),
+      totalQuantity: 0,
+      totalCost: 0,
+      totalSale: 0,
+      profit: 0,
+      status: 'pending',
+    };
+
+    recalculateAndSave([...sheet.rows, newRow]);
+    onAddAuditLog('إضافة منتج للكشف', item.name, '', `سعر البيع الافتراضي: ${item.defaultSalePrice} ر.س`);
   };
 
   // Purchase Status Toggle
@@ -313,6 +357,11 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
   const totalUnits = sheet.rows.reduce((sum, r) => sum + r.totalQuantity, 0);
   const purchasedRowsCount = sheet.rows.filter((r) => r.status === 'purchased').length;
 
+  // Available master products not yet present in today's sheet
+  const availableItemsToAdd = items.filter(
+    (item) => !sheet.rows.some((r) => r.itemId === item.id || r.itemName === item.name)
+  );
+
   return (
     <div className="space-y-4 max-w-7xl mx-auto pb-20">
       {/* Top Banner / Date & Mode Strip */}
@@ -349,33 +398,33 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
 
         {/* View Switchers & Action Controls */}
         <div className="flex flex-wrap items-center gap-2">
-          {/* Mobile Display Mode: Cards vs Table */}
+          {/* Display Mode: Table (Default) vs Cards (Secondary) */}
           <div className="bg-slate-100 p-1 rounded-xl flex items-center gap-1">
             <button
               type="button"
-              onClick={() => setViewMode('cards')}
-              className={`flex items-center gap-1 px-3 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer ${
-                viewMode === 'cards'
-                  ? 'bg-white text-[#006266] shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-              title="عرض بطاقات لمس مخصصة لشاشة الجوال"
-            >
-              <LayoutGrid className="w-3.5 h-3.5" />
-              <span>بطاقات الجوال</span>
-            </button>
-            <button
-              type="button"
               onClick={() => setViewMode('table')}
-              className={`flex items-center gap-1 px-3 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer ${
                 viewMode === 'table'
                   ? 'bg-white text-[#006266] shadow-xs'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
-              title="عرض الجدول الميداني العريض"
+              title="عرض الجدول الميداني الشامل (الافتراضي)"
             >
               <TableIcon className="w-3.5 h-3.5" />
-              <span>الجدول</span>
+              <span>الجدول (الافتراضي)</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('cards')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer ${
+                viewMode === 'cards'
+                  ? 'bg-white text-[#006266] shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+              title="عرض بطاقات لمس مخصصة لشاشة الجوال (ثانوي)"
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+              <span>البطاقات (ثانوي)</span>
             </button>
           </div>
 
@@ -466,14 +515,42 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
       {/* Action Buttons Strip */}
       <div className="bg-white p-3 rounded-2xl border border-slate-200 flex flex-wrap items-center justify-between gap-3 shadow-xs">
         <div className="flex flex-wrap items-center gap-2">
-          {(currentRole === 'admin' || settings.permissions.workerCanAddItem) && (
-            <button
-              onClick={onOpenAddItem}
-              className="flex items-center gap-1 px-3.5 py-2 text-xs font-bold text-white bg-[#006266] hover:bg-[#004e51] rounded-xl transition-colors cursor-pointer shadow-xs whitespace-nowrap"
-            >
-              <Plus className="w-4 h-4" />
-              <span>+ صنف جديد</span>
-            </button>
+          {/* Always accessible Add Product Button for Worker */}
+          <button
+            onClick={onOpenAddItem}
+            className="flex items-center gap-1.5 px-4 py-2 text-xs font-black text-white bg-[#006266] hover:bg-[#004e51] rounded-xl transition-all cursor-pointer shadow-xs whitespace-nowrap active:scale-95"
+            title="إضافة صنف أو منتج جديد إلى النظام وكشف اليومية"
+          >
+            <Plus className="w-4 h-4" />
+            <span>+ إضافة منتج جديد</span>
+          </button>
+
+          {/* Quick select from available master products */}
+          {availableItemsToAdd.length > 0 && (
+            <div className="flex items-center gap-1 bg-slate-100 px-2 py-1 rounded-xl border border-slate-200">
+              <span className="text-[11px] text-slate-600 font-bold whitespace-nowrap hidden sm:inline">
+                أصناف مسجلة:
+              </span>
+              <select
+                onChange={(e) => {
+                  if (e.target.value) {
+                    handleAddProductToSheet(e.target.value);
+                    e.target.value = '';
+                  }
+                }}
+                defaultValue=""
+                className="text-xs bg-white border border-slate-300 font-bold text-slate-800 py-1 px-2 rounded-lg cursor-pointer focus:outline-none focus:ring-1 focus:ring-[#006266]"
+              >
+                <option value="" disabled>
+                  + اختر منتج لإضافته للكشف ({availableItemsToAdd.length})
+                </option>
+                {availableItemsToAdd.map((it) => (
+                  <option key={it.id} value={it.id}>
+                    {it.name} ({it.unit}) - بيع: {it.defaultSalePrice} ر.س
+                  </option>
+                ))}
+              </select>
+            </div>
           )}
 
           {(currentRole === 'admin' || settings.permissions.workerCanAddSupplier) && (
@@ -648,9 +725,22 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
                             <span className="whitespace-nowrap">
                               كمية ({activeGrocery?.name.replace('بقالة', '')}):
                             </span>
-                            <span className="font-mono text-xs text-slate-500">
-                              سعر البيع: {row.salePrice} ر.س
-                            </span>
+                            <div className="flex items-center gap-1 bg-white px-2 py-0.5 rounded-lg border border-amber-300">
+                              <span className="font-bold text-[11px] text-slate-600">سعر البيع:</span>
+                              <input
+                                type="number"
+                                min="0"
+                                step="50"
+                                disabled={isLocked}
+                                value={row.salePrice === 0 ? '' : row.salePrice}
+                                onChange={(e) =>
+                                  handlePriceChange(row.id, 'salePrice', parseFloat(e.target.value) || 0)
+                                }
+                                className="w-16 text-center font-mono font-black text-xs py-0.5 bg-transparent text-[#0c2461] focus:outline-none"
+                                title="تحديد سعر البيع"
+                              />
+                              <span className="text-[10px] text-slate-500">ر.س</span>
+                            </div>
                           </div>
 
                           {/* Stepper with Huge Buttons */}
@@ -799,12 +889,14 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
                         المجموع
                       </th>
                       {settings.permissions.workerCanViewPurchaseCost && (
-                        <th className="p-3 text-center font-bold min-w-[80px] whitespace-nowrap">
+                        <th className="p-3 text-center font-bold min-w-[95px] whitespace-nowrap">
                           سعر الشراء
                         </th>
                       )}
-                      <th className="p-3 text-center font-bold min-w-[80px] whitespace-nowrap">
-                        سعر البيع
+                      <th className="p-3 text-center font-bold min-w-[125px] whitespace-nowrap bg-[#1e3799]">
+                        <div className="text-[#f6b93b] font-black">
+                          سعر البيع (تحديد السعر)
+                        </div>
                       </th>
                       <th className="p-3 text-center font-bold min-w-[110px] whitespace-nowrap">
                         حالة الشراء
@@ -880,16 +972,50 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
 
                         {settings.permissions.workerCanViewPurchaseCost && (
                           <td className="p-2 text-center whitespace-nowrap">
-                            <span className="font-mono text-xs tabular-nums text-slate-700">
-                              {row.costPrice} ر.س
-                            </span>
+                            <div className="flex items-center justify-center gap-1">
+                              <input
+                                type="number"
+                                min="0"
+                                step="50"
+                                disabled={isLocked}
+                                value={row.costPrice === 0 ? '' : row.costPrice}
+                                onChange={(e) =>
+                                  handlePriceChange(
+                                    row.id,
+                                    'costPrice',
+                                    parseFloat(e.target.value) || 0
+                                  )
+                                }
+                                placeholder="0"
+                                className="w-20 text-center font-mono text-xs py-1 px-1 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#006266]/40 text-slate-700 shadow-2xs font-bold"
+                                title="تحديد سعر الشراء مباشرة من الجدول"
+                              />
+                              <span className="text-[10px] text-slate-500 font-bold">ر.س</span>
+                            </div>
                           </td>
                         )}
 
                         <td className="p-2 text-center whitespace-nowrap">
-                          <span className="font-mono text-xs tabular-nums text-[#0c2461] font-bold">
-                            {row.salePrice} ر.س
-                          </span>
+                          <div className="flex items-center justify-center gap-1">
+                            <input
+                              type="number"
+                              min="0"
+                              step="50"
+                              disabled={isLocked}
+                              value={row.salePrice === 0 ? '' : row.salePrice}
+                              onChange={(e) =>
+                                handlePriceChange(
+                                  row.id,
+                                  'salePrice',
+                                  parseFloat(e.target.value) || 0
+                                )
+                              }
+                              placeholder="0"
+                              className="w-22 text-center font-mono text-xs py-1 px-1.5 bg-amber-50 hover:bg-amber-100/50 border border-amber-400 focus:border-[#006266] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#006266]/40 text-[#0c2461] font-black shadow-2xs"
+                              title="تحديد سعر بيع الصنف للبقالات مباشرة من الجدول"
+                            />
+                            <span className="text-[10px] text-slate-600 font-bold">ر.س</span>
+                          </div>
                         </td>
 
                         <td className="p-2 text-center whitespace-nowrap">
@@ -922,6 +1048,46 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
                       </tr>
                     ))}
                   </tbody>
+                  <tfoot>
+                    <tr className="bg-slate-50 border-t-2 border-slate-200">
+                      <td
+                        colSpan={groceries.length + (settings.permissions.workerCanViewPurchaseCost ? 6 : 5)}
+                        className="p-3 text-right"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <button
+                            type="button"
+                            onClick={onOpenAddItem}
+                            className="flex items-center gap-1.5 px-4 py-2 text-xs font-black text-white bg-[#006266] hover:bg-[#004e51] rounded-xl transition-all cursor-pointer shadow-xs active:scale-95"
+                          >
+                            <Plus className="w-4 h-4" />
+                            <span>+ إضافة صنف / منتج جديد للكشف</span>
+                          </button>
+
+                          {availableItemsToAdd.length > 0 && (
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-slate-500 font-bold">
+                                أصناف متوفرة للإضافة السريعة:
+                              </span>
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                {availableItemsToAdd.slice(0, 6).map((it) => (
+                                  <button
+                                    key={it.id}
+                                    type="button"
+                                    onClick={() => handleAddProductToSheet(it.id)}
+                                    className="px-2.5 py-1 text-xs font-bold text-[#006266] bg-white border border-[#006266]/30 hover:bg-[#006266] hover:text-white rounded-lg transition-colors cursor-pointer shadow-2xs active:scale-95"
+                                    title={`إضافة ${it.name} بسعر ${it.defaultSalePrice} ر.س`}
+                                  >
+                                    + {it.name} ({it.unit})
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  </tfoot>
                 </table>
               </div>
             </div>

@@ -1,6 +1,5 @@
 import React from 'react';
 import { ActivePage, ThemeId, UserAccount } from '../types';
-import { ThemeSwitcher } from './ThemeSwitcher';
 import {
   PlusCircle,
   ShieldCheck,
@@ -161,13 +160,8 @@ export const Header: React.FC<HeaderProps> = ({
             )}
           </nav>
 
-          {/* Zone 3: Themes Switcher, User Avatar & Primary Action */}
+          {/* Zone 3: User Avatar & Primary Action */}
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-            {/* Theme switcher */}
-            <div className="hidden sm:block">
-              <ThemeSwitcher currentTheme={currentTheme} onThemeChange={onThemeChange} />
-            </div>
-
             {/* User Profile / Login status */}
             {currentUser ? (
               <div
@@ -225,20 +219,18 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
 
-        {/* Mobile Horizontal Sub-Bar with Themes & Quick Role Toggle */}
-        <div
-          className="sm:hidden border-t px-3 py-2 flex items-center justify-between gap-2 overflow-x-auto scrollbar-thin transition-colors duration-300"
-          style={{
-            backgroundColor: 'var(--theme-primary-dark)',
-            borderColor: 'rgba(255, 255, 255, 0.1)',
-          }}
-        >
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] text-slate-300 font-bold whitespace-nowrap">الثيم:</span>
-            <ThemeSwitcher currentTheme={currentTheme} onThemeChange={onThemeChange} />
-          </div>
-
-          {currentUser && (
+        {/* Mobile Horizontal Sub-Bar with Quick Role Indicator */}
+        {currentUser && (
+          <div
+            className="sm:hidden border-t px-3 py-1.5 flex items-center justify-between gap-2 transition-colors duration-300"
+            style={{
+              backgroundColor: 'var(--theme-primary-dark)',
+              borderColor: 'rgba(255, 255, 255, 0.1)',
+            }}
+          >
+            <span className="text-[11px] text-slate-300 font-bold whitespace-nowrap">
+              المستخدم: {currentUser.name}
+            </span>
             <div
               className="flex items-center gap-1 text-[11px] font-black whitespace-nowrap px-2.5 py-0.5 rounded-full"
               style={{
@@ -248,8 +240,8 @@ export const Header: React.FC<HeaderProps> = ({
             >
               <span>{currentUser.role === 'admin' ? 'مدير' : currentUser.role === 'worker' ? 'عامل' : 'بقالة'}</span>
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </header>
 
       {/* MOBILE THUMB-FRIENDLY BOTTOM NAVIGATION BAR */}

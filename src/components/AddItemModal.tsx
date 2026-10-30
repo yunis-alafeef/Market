@@ -11,8 +11,8 @@ interface AddItemModalProps {
 export const AddItemModal: React.FC<AddItemModalProps> = ({ isOpen, onClose, onAddItem }) => {
   const [name, setName] = useState('');
   const [unit, setUnit] = useState('سلة');
-  const [defaultCostPrice, setDefaultCostPrice] = useState<number>(30);
-  const [defaultSalePrice, setDefaultSalePrice] = useState<number>(38);
+  const [defaultCostPrice, setDefaultCostPrice] = useState<number>(3500);
+  const [defaultSalePrice, setDefaultSalePrice] = useState<number>(4200);
 
   if (!isOpen) return null;
 
