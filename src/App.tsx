@@ -74,6 +74,7 @@ export default function App() {
   // Apply theme to document
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', currentTheme);
+    document.body.setAttribute('data-theme', currentTheme);
     try {
       localStorage.setItem('veg_app_theme_v1', currentTheme);
     } catch {
@@ -394,7 +395,14 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col font-sans transition-colors duration-200">
+    <div
+      data-theme={currentTheme}
+      className="min-h-screen flex flex-col font-sans transition-colors duration-300"
+      style={{
+        backgroundColor: 'var(--theme-bg)',
+        color: 'var(--theme-text)',
+      }}
+    >
       {/* Universal Top Header */}
       <Header
         activePage={activePage}

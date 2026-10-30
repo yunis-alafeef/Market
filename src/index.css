@@ -1,89 +1,370 @@
 @import "tailwindcss";
 
-@layer base {
-  :root,
-  [data-theme="royal_navy"] {
-    --primary-navy: #0c2461;
-    --secondary-blue: #1e3799;
-    --accent-amber: #f6b93b;
-    --worker-teal: #006266;
-    --success-green: #009432;
-    --bg-main: #f0f2f5;
-    --card-bg: #ffffff;
-    --text-primary: #0f172a;
-    --text-muted: #64748b;
-    --border-subtle: #e2e8f0;
-  }
+/* ====================================================================
+   LUXURY MULTI-THEME ENGINE FOR VEGETABLE ACCOUNTING SYSTEM
+   ==================================================================== */
 
-  [data-theme="indigo_gold"] {
-    --primary-navy: #1e1b4b;
-    --secondary-blue: #4338ca;
-    --accent-amber: #d97706;
-    --worker-teal: #0f766e;
-    --success-green: #059669;
-    --bg-main: #f8fafc;
-    --card-bg: #ffffff;
-    --text-primary: #0f172a;
-    --text-muted: #64748b;
-    --border-subtle: #cbd5e1;
-  }
-
-  [data-theme="emerald_botanical"] {
-    --primary-navy: #064e3b;
-    --secondary-blue: #047857;
-    --accent-amber: #eab308;
-    --worker-teal: #0d9488;
-    --success-green: #16a34a;
-    --bg-main: #f1f8f5;
-    --card-bg: #ffffff;
-    --text-primary: #064e3b;
-    --text-muted: #52796f;
-    --border-subtle: #d1e7dd;
-  }
-
-  [data-theme="dark_luxury"] {
-    --primary-navy: #0f172a;
-    --secondary-blue: #1e293b;
-    --accent-amber: #f59e0b;
-    --worker-teal: #14b8a6;
-    --success-green: #10b981;
-    --bg-main: #090d16;
-    --card-bg: #111827;
-    --text-primary: #f8fafc;
-    --text-muted: #94a3b8;
-    --border-subtle: #1f2937;
-  }
-
-  body {
-    font-family: 'Cairo', 'Tajawal', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    background-color: var(--bg-main);
-    color: var(--text-primary);
-    -webkit-tap-highlight-color: transparent;
-  }
-
-  .tabular-nums {
-    font-variant-numeric: tabular-nums;
-  }
+/* 1. Default: Royal Navy & Imperial Gold (الكحلي الملكي) */
+:root,
+[data-theme="royal_navy"] {
+  --theme-primary: #0c2461;
+  --theme-primary-dark: #071944;
+  --theme-primary-light: #153e90;
+  --theme-secondary: #1e3799;
+  --theme-accent: #f6b93b;
+  --theme-accent-hover: #e5aa32;
+  --theme-worker: #006266;
+  --theme-worker-dark: #004d50;
+  --theme-success: #009432;
+  --theme-bg: #f1f5f9;
+  --theme-card: #ffffff;
+  --theme-card-subtle: #f8fafc;
+  --theme-card-hover: #f1f5f9;
+  --theme-text: #0f172a;
+  --theme-text-muted: #64748b;
+  --theme-border: #e2e8f0;
+  --theme-border-strong: #cbd5e1;
+  --theme-header-text: #ffffff;
+  --theme-chip-bg: rgba(246, 185, 59, 0.15);
+  --theme-glow: rgba(12, 36, 97, 0.2);
 }
 
-/* Custom scrollbar */
+/* 2. OLED Obsidian Dark & Cyber Gold (الأسود الفخم OLED) */
+[data-theme="dark_luxury"] {
+  --theme-primary: #090d16;
+  --theme-primary-dark: #020617;
+  --theme-primary-light: #1e293b;
+  --theme-secondary: #334155;
+  --theme-accent: #fbbf24;
+  --theme-accent-hover: #f59e0b;
+  --theme-worker: #0d9488;
+  --theme-worker-dark: #0f766e;
+  --theme-success: #10b981;
+  --theme-bg: #030712;
+  --theme-card: #0f172a;
+  --theme-card-subtle: #1e293b;
+  --theme-card-hover: #334155;
+  --theme-text: #f8fafc;
+  --theme-text-muted: #94a3b8;
+  --theme-border: #1e293b;
+  --theme-border-strong: #334155;
+  --theme-header-text: #f8fafc;
+  --theme-chip-bg: rgba(251, 191, 36, 0.18);
+  --theme-glow: rgba(251, 191, 36, 0.25);
+}
+
+/* 3. Royal Emerald Botanical & Champagne Gold (الزمرد الزراعي الملكي) */
+[data-theme="emerald_botanical"] {
+  --theme-primary: #064e3b;
+  --theme-primary-dark: #022c22;
+  --theme-primary-light: #047857;
+  --theme-secondary: #059669;
+  --theme-accent: #f59e0b;
+  --theme-accent-hover: #d97706;
+  --theme-worker: #0d9488;
+  --theme-worker-dark: #0f766e;
+  --theme-success: #16a34a;
+  --theme-bg: #f0fdf4;
+  --theme-card: #ffffff;
+  --theme-card-subtle: #ecfdf5;
+  --theme-card-hover: #d1fae5;
+  --theme-text: #064e3b;
+  --theme-text-muted: #3b7058;
+  --theme-border: #bbf7d0;
+  --theme-border-strong: #86efac;
+  --theme-header-text: #ffffff;
+  --theme-chip-bg: rgba(245, 158, 11, 0.18);
+  --theme-glow: rgba(6, 78, 59, 0.25);
+}
+
+/* 4. Imperial Midnight Indigo & Amber (النيلي العصري) */
+[data-theme="indigo_gold"] {
+  --theme-primary: #1e1b4b;
+  --theme-primary-dark: #131034;
+  --theme-primary-light: #312e81;
+  --theme-secondary: #4338ca;
+  --theme-accent: #f59e0b;
+  --theme-accent-hover: #d97706;
+  --theme-worker: #0f766e;
+  --theme-worker-dark: #0d5f59;
+  --theme-success: #059669;
+  --theme-bg: #f8fafc;
+  --theme-card: #ffffff;
+  --theme-card-subtle: #f1f5f9;
+  --theme-card-hover: #e2e8f0;
+  --theme-text: #1e1b4b;
+  --theme-text-muted: #64748b;
+  --theme-border: #cbd5e1;
+  --theme-border-strong: #94a3b8;
+  --theme-header-text: #ffffff;
+  --theme-chip-bg: rgba(245, 158, 11, 0.18);
+  --theme-glow: rgba(30, 27, 75, 0.25);
+}
+
+/* 5. Imperial Ruby & Warm Gold (العقيق الملكي الفاخر) */
+[data-theme="ruby_luxury"] {
+  --theme-primary: #4c0519;
+  --theme-primary-dark: #2e020e;
+  --theme-primary-light: #881337;
+  --theme-secondary: #9f1239;
+  --theme-accent: #fbbf24;
+  --theme-accent-hover: #f59e0b;
+  --theme-worker: #006266;
+  --theme-worker-dark: #004d50;
+  --theme-success: #009432;
+  --theme-bg: #fff1f2;
+  --theme-card: #ffffff;
+  --theme-card-subtle: #ffe4e6;
+  --theme-card-hover: #fecdd3;
+  --theme-text: #4c0519;
+  --theme-text-muted: #9f1239;
+  --theme-border: #fecdd3;
+  --theme-border-strong: #fda4af;
+  --theme-header-text: #ffffff;
+  --theme-chip-bg: rgba(251, 191, 36, 0.18);
+  --theme-glow: rgba(76, 5, 25, 0.25);
+}
+
+/* Universal Typography & Root Styling */
+html,
+body {
+  font-family: 'Cairo', 'Tajawal', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background-color: var(--theme-bg) !important;
+  color: var(--theme-text) !important;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color 0.35s ease, color 0.35s ease, border-color 0.35s ease;
+  min-height: 100vh;
+}
+
+#root {
+  min-height: 100vh;
+  background-color: var(--theme-bg);
+  color: var(--theme-text);
+  transition: background-color 0.35s ease;
+}
+
+/* Tabular numbers for clean financial alignment */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ====================================================================
+   AUTOMATIC THEME OVERRIDES FOR UNIFORM TRANSFORMATION
+   ==================================================================== */
+
+/* Replace hardcoded brand colors with current theme variables */
+[data-theme] .bg-\[\#0c2461\],
+[data-theme] .bg-\[\#0C2461\] {
+  background-color: var(--theme-primary) !important;
+}
+
+[data-theme] .bg-\[\#1e3799\],
+[data-theme] .bg-\[\#1E3799\] {
+  background-color: var(--theme-secondary) !important;
+}
+
+[data-theme] .bg-\[\#006266\],
+[data-theme] .bg-\[\#006266\]\/10 {
+  background-color: var(--theme-worker) !important;
+}
+
+[data-theme] .text-\[\#0c2461\],
+[data-theme] .text-\[\#0C2461\] {
+  color: var(--theme-primary) !important;
+}
+
+[data-theme] .text-\[\#006266\] {
+  color: var(--theme-worker) !important;
+}
+
+[data-theme] .border-\[\#0c2461\],
+[data-theme] .border-\[\#0C2461\] {
+  border-color: var(--theme-primary) !important;
+}
+
+/* ====================================================================
+   DARK LUXURY OLED MODE FULL-PAGE MORPHING
+   ==================================================================== */
+[data-theme="dark_luxury"] body,
+[data-theme="dark_luxury"] #root {
+  background-color: #030712 !important;
+  color: #f8fafc !important;
+}
+
+/* Cards, Modals and Panels in Dark Mode */
+[data-theme="dark_luxury"] .bg-white {
+  background-color: #0f172a !important;
+  color: #f8fafc !important;
+  border-color: #1e293b !important;
+}
+
+[data-theme="dark_luxury"] .bg-slate-50,
+[data-theme="dark_luxury"] .bg-slate-100,
+[data-theme="dark_luxury"] .bg-gray-50,
+[data-theme="dark_luxury"] .bg-gray-100 {
+  background-color: #182234 !important;
+  border-color: #1e293b !important;
+  color: #f1f5f9 !important;
+}
+
+/* Text adjustments for dark mode */
+[data-theme="dark_luxury"] .text-slate-900,
+[data-theme="dark_luxury"] .text-slate-800,
+[data-theme="dark_luxury"] .text-slate-700,
+[data-theme="dark_luxury"] .text-gray-900,
+[data-theme="dark_luxury"] .text-gray-800 {
+  color: #f8fafc !important;
+}
+
+[data-theme="dark_luxury"] .text-slate-600,
+[data-theme="dark_luxury"] .text-slate-500,
+[data-theme="dark_luxury"] .text-gray-600,
+[data-theme="dark_luxury"] .text-gray-500 {
+  color: #94a3b8 !important;
+}
+
+[data-theme="dark_luxury"] .text-slate-400 {
+  color: #64748b !important;
+}
+
+/* Borders in dark mode */
+[data-theme="dark_luxury"] .border-slate-200,
+[data-theme="dark_luxury"] .border-slate-100,
+[data-theme="dark_luxury"] .border-slate-300,
+[data-theme="dark_luxury"] .border-gray-200 {
+  border-color: #1e293b !important;
+}
+
+[data-theme="dark_luxury"] .divide-slate-200 > :not([hidden]) ~ :not([hidden]),
+[data-theme="dark_luxury"] .divide-slate-100 > :not([hidden]) ~ :not([hidden]) {
+  border-color: #1e293b !important;
+}
+
+/* Form Inputs, Selects & Checkboxes in dark mode */
+[data-theme="dark_luxury"] input:not([type="checkbox"]):not([type="radio"]),
+[data-theme="dark_luxury"] select,
+[data-theme="dark_luxury"] textarea {
+  background-color: #182234 !important;
+  color: #ffffff !important;
+  border-color: #334155 !important;
+}
+
+[data-theme="dark_luxury"] input:focus,
+[data-theme="dark_luxury"] select:focus,
+[data-theme="dark_luxury"] textarea:focus {
+  border-color: #fbbf24 !important;
+  box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.25) !important;
+}
+
+/* Table rows alternating in dark mode */
+[data-theme="dark_luxury"] tr:hover {
+  background-color: #1e293b !important;
+}
+
+/* ====================================================================
+   EMERALD BOTANICAL MODE MORPHING
+   ==================================================================== */
+[data-theme="emerald_botanical"] .border-slate-200 {
+  border-color: #bbf7d0 !important;
+}
+
+[data-theme="emerald_botanical"] .bg-slate-50,
+[data-theme="emerald_botanical"] .bg-slate-100 {
+  background-color: #f0fdf4 !important;
+}
+
+/* ====================================================================
+   RUBY LUXURY MODE MORPHING
+   ==================================================================== */
+[data-theme="ruby_luxury"] .border-slate-200 {
+  border-color: #fecdd3 !important;
+}
+
+[data-theme="ruby_luxury"] .bg-slate-50,
+[data-theme="ruby_luxury"] .bg-slate-100 {
+  background-color: #fff1f2 !important;
+}
+
+/* ====================================================================
+   THEME UTILITY SHORTCUTS
+   ==================================================================== */
+.theme-header {
+  background-color: var(--theme-primary) !important;
+  color: var(--theme-header-text) !important;
+}
+
+.theme-card {
+  background-color: var(--theme-card) !important;
+  border-color: var(--theme-border) !important;
+  color: var(--theme-text) !important;
+}
+
+.theme-subcard {
+  background-color: var(--theme-card-subtle) !important;
+  border-color: var(--theme-border) !important;
+}
+
+.theme-btn-primary {
+  background-color: var(--theme-primary) !important;
+  color: var(--theme-header-text) !important;
+}
+.theme-btn-primary:hover {
+  background-color: var(--theme-primary-dark) !important;
+}
+
+.theme-btn-secondary {
+  background-color: var(--theme-secondary) !important;
+  color: #ffffff !important;
+}
+
+.theme-btn-accent {
+  background-color: var(--theme-accent) !important;
+  color: #0c2461 !important;
+}
+.theme-btn-accent:hover {
+  background-color: var(--theme-accent-hover) !important;
+}
+
+.theme-btn-worker {
+  background-color: var(--theme-worker) !important;
+  color: #ffffff !important;
+}
+.theme-btn-worker:hover {
+  background-color: var(--theme-worker-dark) !important;
+}
+
+.theme-text-primary {
+  color: var(--theme-primary) !important;
+}
+
+.theme-text-accent {
+  color: var(--theme-accent) !important;
+}
+
+.theme-text-worker {
+  color: var(--theme-worker) !important;
+}
+
+.theme-chip {
+  background-color: var(--theme-chip-bg) !important;
+  color: var(--theme-accent) !important;
+}
+
+/* Custom sleek scrollbars */
 .scrollbar-thin::-webkit-scrollbar {
   height: 6px;
   width: 6px;
 }
 .scrollbar-thin::-webkit-scrollbar-track {
-  background: #e2e8f0;
+  background: var(--theme-bg);
   border-radius: 4px;
 }
 .scrollbar-thin::-webkit-scrollbar-thumb {
-  background: #94a3b8;
+  background: var(--theme-border-strong);
   border-radius: 4px;
 }
-.scrollbar-thin::-webkit-scrollbar-thumb:hover {
-  background: #64748b;
-}
 
-/* Prevent awkward single-word wrapping on mobile */
+/* Mobile typography single-line helpers */
 .nowrap-text {
   white-space: nowrap;
 }

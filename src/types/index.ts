@@ -111,7 +111,7 @@ export interface SystemSettings {
 
 export type ActivePage = 'worker' | 'reports' | 'dashboard' | 'settings' | 'grocery';
 
-export type ThemeId = 'royal_navy' | 'indigo_gold' | 'emerald_botanical' | 'dark_luxury';
+export type ThemeId = 'royal_navy' | 'indigo_gold' | 'emerald_botanical' | 'dark_luxury' | 'ruby_luxury';
 
 export type PrintTemplateId = 'royal_classic' | 'modern_minimal';
 

@@ -37,31 +37,52 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   return (
     <>
-      <header className="sticky top-0 z-40 bg-[#0c2461] text-white shadow-md border-b border-[#1e3799]/40 print:hidden">
+      <header
+        className="sticky top-0 z-40 text-white shadow-lg border-b transition-colors duration-300 print:hidden theme-header"
+        style={{
+          backgroundColor: 'var(--theme-primary)',
+          borderColor: 'rgba(255, 255, 255, 0.15)',
+        }}
+      >
         {/* Main Desktop & Tablet Top Bar */}
-        <div className="max-w-7xl mx-auto px-3 sm:px-6 py-2.5 flex items-center justify-between gap-4">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 py-3 flex items-center justify-between gap-4">
           {/* Zone 1: Single Brand Wordmark */}
-          <div className="flex items-center gap-2.5 shrink-0">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#f6b93b] to-amber-400 flex items-center justify-center text-[#0c2461] font-black shadow-sm text-base">
+          <div className="flex items-center gap-3 shrink-0">
+            <div
+              className="w-10 h-10 rounded-2xl flex items-center justify-center font-black shadow-md text-lg transition-colors duration-300"
+              style={{
+                backgroundColor: 'var(--theme-accent)',
+                color: 'var(--theme-primary)',
+              }}
+            >
               خ
             </div>
-            <span className="text-sm sm:text-base font-black tracking-tight text-white whitespace-nowrap">
-              محاسبة الخضروات
-            </span>
+            <div>
+              <span className="text-base sm:text-lg font-black tracking-tight text-white whitespace-nowrap block">
+                محاسبة الخضروات
+              </span>
+              <span className="text-[10px] text-slate-300 font-bold block">
+                سوق الجملة المركزي والتوزيع
+              </span>
+            </div>
           </div>
 
           {/* Zone 2: Navigation Links (Restricted by Role) */}
-          <nav className="hidden lg:flex items-center gap-5 text-xs sm:text-sm font-bold text-slate-200">
+          <nav className="hidden lg:flex items-center gap-6 text-xs sm:text-sm font-black text-slate-200">
             {/* Worker link (Admin and Worker) */}
             {(!currentUser || currentUser.role === 'admin' || currentUser.role === 'worker') && (
               <button
                 type="button"
                 onClick={() => onPageChange('worker')}
-                className={`transition-colors whitespace-nowrap shrink-0 cursor-pointer py-1.5 border-b-2 ${
+                className={`transition-all whitespace-nowrap shrink-0 cursor-pointer py-1.5 border-b-2 ${
                   activePage === 'worker'
-                    ? 'text-[#f6b93b] border-[#f6b93b]'
+                    ? 'border-current font-black'
                     : 'border-transparent text-slate-200 hover:text-white'
                 }`}
+                style={{
+                  color: activePage === 'worker' ? 'var(--theme-accent)' : undefined,
+                  borderColor: activePage === 'worker' ? 'var(--theme-accent)' : undefined,
+                }}
               >
                 شاشة العامل الميداني
               </button>
@@ -73,11 +94,15 @@ export const Header: React.FC<HeaderProps> = ({
                 <button
                   type="button"
                   onClick={() => onPageChange('dashboard')}
-                  className={`transition-colors whitespace-nowrap shrink-0 cursor-pointer py-1.5 border-b-2 ${
+                  className={`transition-all whitespace-nowrap shrink-0 cursor-pointer py-1.5 border-b-2 ${
                     activePage === 'dashboard'
-                      ? 'text-[#f6b93b] border-[#f6b93b]'
+                      ? 'border-current font-black'
                       : 'border-transparent text-slate-200 hover:text-white'
                   }`}
+                  style={{
+                    color: activePage === 'dashboard' ? 'var(--theme-accent)' : undefined,
+                    borderColor: activePage === 'dashboard' ? 'var(--theme-accent)' : undefined,
+                  }}
                 >
                   لوحة تحكم المدير
                 </button>
@@ -85,11 +110,15 @@ export const Header: React.FC<HeaderProps> = ({
                 <button
                   type="button"
                   onClick={() => onPageChange('reports')}
-                  className={`transition-colors whitespace-nowrap shrink-0 cursor-pointer py-1.5 border-b-2 ${
+                  className={`transition-all whitespace-nowrap shrink-0 cursor-pointer py-1.5 border-b-2 ${
                     activePage === 'reports'
-                      ? 'text-[#f6b93b] border-[#f6b93b]'
+                      ? 'border-current font-black'
                       : 'border-transparent text-slate-200 hover:text-white'
                   }`}
+                  style={{
+                    color: activePage === 'reports' ? 'var(--theme-accent)' : undefined,
+                    borderColor: activePage === 'reports' ? 'var(--theme-accent)' : undefined,
+                  }}
                 >
                   تقارير الأيام والتعديل الشامل
                 </button>
@@ -97,11 +126,15 @@ export const Header: React.FC<HeaderProps> = ({
                 <button
                   type="button"
                   onClick={() => onPageChange('settings')}
-                  className={`transition-colors whitespace-nowrap shrink-0 cursor-pointer py-1.5 border-b-2 ${
+                  className={`transition-all whitespace-nowrap shrink-0 cursor-pointer py-1.5 border-b-2 ${
                     activePage === 'settings'
-                      ? 'text-[#f6b93b] border-[#f6b93b]'
+                      ? 'border-current font-black'
                       : 'border-transparent text-slate-200 hover:text-white'
                   }`}
+                  style={{
+                    color: activePage === 'settings' ? 'var(--theme-accent)' : undefined,
+                    borderColor: activePage === 'settings' ? 'var(--theme-accent)' : undefined,
+                  }}
                 >
                   إعدادات النظام والرقابة
                 </button>
@@ -113,11 +146,15 @@ export const Header: React.FC<HeaderProps> = ({
               <button
                 type="button"
                 onClick={() => onPageChange('grocery')}
-                className={`transition-colors whitespace-nowrap shrink-0 cursor-pointer py-1.5 border-b-2 ${
+                className={`transition-all whitespace-nowrap shrink-0 cursor-pointer py-1.5 border-b-2 ${
                   activePage === 'grocery'
-                    ? 'text-[#f6b93b] border-[#f6b93b]'
+                    ? 'border-current font-black'
                     : 'border-transparent text-slate-200 hover:text-white'
                 }`}
+                style={{
+                  color: activePage === 'grocery' ? 'var(--theme-accent)' : undefined,
+                  borderColor: activePage === 'grocery' ? 'var(--theme-accent)' : undefined,
+                }}
               >
                 بوابة صاحب البقالة
               </button>
@@ -133,11 +170,23 @@ export const Header: React.FC<HeaderProps> = ({
 
             {/* User Profile / Login status */}
             {currentUser ? (
-              <div className="flex items-center gap-1.5 bg-[#1e3799]/80 border border-white/10 rounded-xl px-2.5 py-1 text-xs">
-                <span className="w-5 h-5 rounded-full bg-[#f6b93b] text-[#0c2461] font-black flex items-center justify-center text-[10px]">
+              <div
+                className="flex items-center gap-2 rounded-2xl px-3 py-1.5 text-xs font-bold border transition-colors shadow-xs"
+                style={{
+                  backgroundColor: 'rgba(255, 255, 255, 0.12)',
+                  borderColor: 'rgba(255, 255, 255, 0.2)',
+                }}
+              >
+                <span
+                  className="w-6 h-6 rounded-lg font-black flex items-center justify-center text-xs"
+                  style={{
+                    backgroundColor: 'var(--theme-accent)',
+                    color: 'var(--theme-primary)',
+                  }}
+                >
                   {currentUser.avatarBadge}
                 </span>
-                <span className="font-bold text-white hidden md:inline truncate max-w-[100px]">
+                <span className="font-bold text-white hidden md:inline truncate max-w-[120px]">
                   {currentUser.name.split(' ')[0]}
                 </span>
                 <button
@@ -153,9 +202,9 @@ export const Header: React.FC<HeaderProps> = ({
               <button
                 type="button"
                 onClick={onOpenLogin}
-                className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-white bg-white/15 hover:bg-white/25 rounded-xl transition-colors cursor-pointer"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-white/20 hover:bg-white/30 rounded-xl transition-colors cursor-pointer"
               >
-                <LogIn className="w-3.5 h-3.5 text-[#f6b93b]" />
+                <LogIn className="w-3.5 h-3.5" />
                 <span>دخول</span>
               </button>
             )}
@@ -164,41 +213,64 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               type="button"
               onClick={onOpenNewVoucher}
-              className="flex items-center gap-1 px-3 py-1.5 text-xs font-black text-slate-900 bg-[#f6b93b] hover:bg-[#e5aa32] rounded-xl transition-all shadow-xs cursor-pointer whitespace-nowrap shrink-0"
+              className="flex items-center gap-1.5 px-4 py-2 text-xs sm:text-sm font-black rounded-2xl transition-all shadow-md cursor-pointer whitespace-nowrap shrink-0 active:scale-95"
+              style={{
+                backgroundColor: 'var(--theme-accent)',
+                color: 'var(--theme-primary)',
+              }}
             >
-              <PlusCircle className="w-3.5 h-3.5" />
+              <PlusCircle className="w-4 h-4" />
               <span>سند مالي</span>
             </button>
           </div>
         </div>
 
         {/* Mobile Horizontal Sub-Bar with Themes & Quick Role Toggle */}
-        <div className="sm:hidden bg-[#0c2461]/90 border-t border-white/10 px-3 py-1.5 flex items-center justify-between gap-2 overflow-x-auto scrollbar-thin">
+        <div
+          className="sm:hidden border-t px-3 py-2 flex items-center justify-between gap-2 overflow-x-auto scrollbar-thin transition-colors duration-300"
+          style={{
+            backgroundColor: 'var(--theme-primary-dark)',
+            borderColor: 'rgba(255, 255, 255, 0.1)',
+          }}
+        >
           <div className="flex items-center gap-2">
             <span className="text-[11px] text-slate-300 font-bold whitespace-nowrap">الثيم:</span>
             <ThemeSwitcher currentTheme={currentTheme} onThemeChange={onThemeChange} />
           </div>
 
           {currentUser && (
-            <div className="flex items-center gap-1 text-[11px] text-[#f6b93b] font-bold whitespace-nowrap">
+            <div
+              className="flex items-center gap-1 text-[11px] font-black whitespace-nowrap px-2.5 py-0.5 rounded-full"
+              style={{
+                backgroundColor: 'rgba(255, 255, 255, 0.15)',
+                color: 'var(--theme-accent)',
+              }}
+            >
               <span>{currentUser.role === 'admin' ? 'مدير' : currentUser.role === 'worker' ? 'عامل' : 'بقالة'}</span>
             </div>
           )}
         </div>
       </header>
 
-      {/* MOBILE THUMB-FRIENDLY BOTTOM NAVIGATION BAR (Filtered by Role) */}
-      <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 px-2 py-1.5 shadow-lg print:hidden">
-        <div className="flex items-center justify-around text-[10px] font-bold">
+      {/* MOBILE THUMB-FRIENDLY BOTTOM NAVIGATION BAR */}
+      <div
+        className="lg:hidden fixed bottom-0 left-0 right-0 z-40 border-t px-2 py-2 shadow-2xl print:hidden transition-colors duration-300"
+        style={{
+          backgroundColor: 'var(--theme-card)',
+          borderColor: 'var(--theme-border)',
+        }}
+      >
+        <div className="flex items-center justify-around text-[10px] font-black">
           {(!currentUser || currentUser.role === 'admin' || currentUser.role === 'worker') && (
             <button
               type="button"
               onClick={() => onPageChange('worker')}
-              className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-xl transition-colors cursor-pointer ${
-                activePage === 'worker' ? 'text-[#006266] font-black' : 'text-slate-500 hover:text-slate-800'
-              }`}
+              className="flex flex-col items-center gap-0.5 py-1 px-2 rounded-xl transition-colors cursor-pointer"
+              style={{
+                color: activePage === 'worker' ? 'var(--theme-worker)' : 'var(--theme-text-muted)',
+              }}
             >
-              <ShoppingBag className={`w-5 h-5 ${activePage === 'worker' ? 'text-[#006266]' : 'text-slate-400'}`} />
+              <ShoppingBag className="w-5 h-5" />
               <span className="whitespace-nowrap">شاشة العامل</span>
             </button>
           )}
@@ -208,22 +280,24 @@ export const Header: React.FC<HeaderProps> = ({
               <button
                 type="button"
                 onClick={() => onPageChange('dashboard')}
-                className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-xl transition-colors cursor-pointer ${
-                  activePage === 'dashboard' ? 'text-[#0c2461] font-black' : 'text-slate-500 hover:text-slate-800'
-                }`}
+                className="flex flex-col items-center gap-0.5 py-1 px-2 rounded-xl transition-colors cursor-pointer"
+                style={{
+                  color: activePage === 'dashboard' ? 'var(--theme-primary)' : 'var(--theme-text-muted)',
+                }}
               >
-                <DollarSign className={`w-5 h-5 ${activePage === 'dashboard' ? 'text-[#0c2461]' : 'text-slate-400'}`} />
+                <DollarSign className="w-5 h-5" />
                 <span className="whitespace-nowrap">اللوحة المالية</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => onPageChange('reports')}
-                className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-xl transition-colors cursor-pointer ${
-                  activePage === 'reports' ? 'text-[#0c2461] font-black' : 'text-slate-500 hover:text-slate-800'
-                }`}
+                className="flex flex-col items-center gap-0.5 py-1 px-2 rounded-xl transition-colors cursor-pointer"
+                style={{
+                  color: activePage === 'reports' ? 'var(--theme-primary)' : 'var(--theme-text-muted)',
+                }}
               >
-                <Calendar className={`w-5 h-5 ${activePage === 'reports' ? 'text-[#0c2461]' : 'text-slate-400'}`} />
+                <Calendar className="w-5 h-5" />
                 <span className="whitespace-nowrap">التقارير</span>
               </button>
             </>
@@ -233,11 +307,12 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               type="button"
               onClick={() => onPageChange('grocery')}
-              className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-xl transition-colors cursor-pointer ${
-                activePage === 'grocery' ? 'text-[#f6b93b] font-black' : 'text-slate-500 hover:text-slate-800'
-              }`}
+              className="flex flex-col items-center gap-0.5 py-1 px-2 rounded-xl transition-colors cursor-pointer"
+              style={{
+                color: activePage === 'grocery' ? 'var(--theme-accent)' : 'var(--theme-text-muted)',
+              }}
             >
-              <Store className={`w-5 h-5 ${activePage === 'grocery' ? 'text-amber-600' : 'text-slate-400'}`} />
+              <Store className="w-5 h-5" />
               <span className="whitespace-nowrap">البقالة</span>
             </button>
           )}
@@ -246,11 +321,12 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               type="button"
               onClick={() => onPageChange('settings')}
-              className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-xl transition-colors cursor-pointer ${
-                activePage === 'settings' ? 'text-[#0c2461] font-black' : 'text-slate-500 hover:text-slate-800'
-              }`}
+              className="flex flex-col items-center gap-0.5 py-1 px-2 rounded-xl transition-colors cursor-pointer"
+              style={{
+                color: activePage === 'settings' ? 'var(--theme-primary)' : 'var(--theme-text-muted)',
+              }}
             >
-              <Sliders className={`w-5 h-5 ${activePage === 'settings' ? 'text-[#0c2461]' : 'text-slate-400'}`} />
+              <Sliders className="w-5 h-5" />
               <span className="whitespace-nowrap">الإعدادات</span>
             </button>
           )}

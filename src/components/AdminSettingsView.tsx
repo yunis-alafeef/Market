@@ -615,14 +615,52 @@ CREATE TABLE IF NOT EXISTS users (
               </pre>
             </div>
 
-            {/* Step 2: Deployment on Vercel */}
+            {/* Step 2: .env Variables for Vercel */}
+            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 text-xs space-y-3 text-slate-700">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="font-bold text-sm text-[#0c2461] block">
+                    2. متغيرات البيئة الخاصة بمشروعك (جاهزة في ملف .env):
+                  </span>
+                  <span className="text-[11px] text-slate-500">
+                    يمكنك نسخها ولصقها مباشرة في Vercel في خيار (Environment Variables):
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(`SUPABASE_URL="https://hgbnevobfjxggkpzjicv.supabase.co"
+SUPABASE_PUBLISHABLE_KEY="sb_publishable_DesBAjmOQwAYOtcKggQwFQ__vkAjme5"
+SUPABASE_JWKS_URL="https://hgbnevobfjxggkpzjicv.supabase.co/auth/v1/.well-known/jwks.json"
+VITE_SUPABASE_URL="https://hgbnevobfjxggkpzjicv.supabase.co"
+VITE_SUPABASE_ANON_KEY="sb_publishable_DesBAjmOQwAYOtcKggQwFQ__vkAjme5"
+VITE_SUPABASE_PUBLISHABLE_KEY="sb_publishable_DesBAjmOQwAYOtcKggQwFQ__vkAjme5"`);
+                    alert('✅ تم نسخ نص متغيرات البيئة! الصقها في Vercel مباشرة.');
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-[#0c2461] hover:bg-[#1e3799] rounded-xl shadow-xs cursor-pointer"
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                  <span>نسخ متغيرات Vercel</span>
+                </button>
+              </div>
+
+              <pre className="p-3 bg-slate-900 text-emerald-400 rounded-xl text-[11px] font-mono overflow-x-auto text-left dir-ltr">
+{`SUPABASE_URL="https://hgbnevobfjxggkpzjicv.supabase.co"
+SUPABASE_PUBLISHABLE_KEY="sb_publishable_DesBAjmOQwAYOtcKggQwFQ__vkAjme5"
+VITE_SUPABASE_URL="https://hgbnevobfjxggkpzjicv.supabase.co"
+VITE_SUPABASE_ANON_KEY="sb_publishable_DesBAjmOQwAYOtcKggQwFQ__vkAjme5"`}
+              </pre>
+            </div>
+
+            {/* Step 3: Deployment on Vercel */}
             <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 text-xs space-y-2 text-slate-700">
               <span className="font-bold text-sm text-[#0c2461] block">
-                2. خطوات الرفع على Vercel بنقرة واحدة:
+                3. خطوات الرفع على Vercel بنقرة واحدة:
               </span>
               <ol className="list-decimal list-inside space-y-1.5 leading-relaxed">
                 <li>اربط مستودع GitHub الخاص بك بحسابك على Vercel (<span className="font-mono">vercel.com</span>).</li>
                 <li>اختر <strong>Import Git Repository</strong> وحدد المشروع.</li>
+                <li>في قسم <strong>Environment Variables</strong> الصق النص المنسوخ من الزر أعلاه.</li>
                 <li>تأكد من إعدادات البناء: <strong>Framework Preset: Vite</strong> و <strong>Build Command: npm run build</strong>.</li>
                 <li>اضغط <strong>Deploy</strong> وخلال أقل من 40 ثانية سيكون الموقع متاحاً على رابط عالمي سريع ومحمي بشهادة SSL.</li>
               </ol>

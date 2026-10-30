@@ -1,6 +1,6 @@
 {
-  "name": "النظام المحاسبي والرقابي لمشتريات وتوزيع الخضروات",
-  "description": "منظومة محاسبية ورقابية متكاملة لإدارة مشتريات وتوزيع الخضروات الميدانية، كشوفات البقالات والموردين، وجداول فرز الصباح والتقارير المالية.",
+  "name": "Market",
+  "description": "نظام محاسبي ورقابي لمشتريات وتوزيع الخضروات - Market",
   "requestFramePermissions": [],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
