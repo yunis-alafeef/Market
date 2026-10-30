@@ -74,9 +74,9 @@ export const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
   const [showAddUserModal, setShowAddUserModal] = useState(false);
   const [newUserName, setNewUserName] = useState('');
   const [newUserPhone, setNewUserPhone] = useState('');
-  const [newUserRole, setNewUserRole] = useState<'worker' | 'grocery'>('worker');
+  const [newUserRole, setNewUserRole] = useState<'admin' | 'worker' | 'grocery'>('worker');
   const [newUserGroceryId, setNewUserGroceryId] = useState<string>(groceries[0]?.id || '');
-  const [newUserPin, setNewUserPin] = useState('1234');
+  const [newUserPin, setNewUserPin] = useState('');
 
   // Form states for new grocery
   const [newGCode, setNewGCode] = useState('');
@@ -95,15 +95,19 @@ export const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
   // Handle Add New User
   const handleCreateUser = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newUserName.trim() || !newUserPhone.trim() || !newUserPin.trim()) return;
+    if (!newUserName.trim() || !newUserPhone.trim()) return;
+
+    const cleanPhone = newUserPhone.trim().replace(/^0+/, '');
+    // If PIN is not provided, default to their phone number!
+    const effectivePin = newUserPin.trim() || cleanPhone;
 
     const created = AuthService.addUser({
       name: newUserName.trim(),
-      phone: newUserPhone.trim().replace(/^0+/, ''),
+      phone: cleanPhone,
       countryCode: '+967',
-      username: newUserPhone.trim().replace(/^0+/, ''),
+      username: cleanPhone,
       role: newUserRole,
-      pin: newUserPin.trim(),
+      pin: effectivePin,
       groceryId: newUserRole === 'grocery' ? newUserGroceryId : undefined,
       avatarBadge: newUserName.trim().charAt(0),
       active: true,
@@ -112,14 +116,14 @@ export const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
     setUsersList(AuthService.getUsers());
     setNewUserName('');
     setNewUserPhone('');
-    setNewUserPin('1234');
+    setNewUserPin('');
     setShowAddUserModal(false);
-    alert(`✅ تم إنشاء حساب جديد بنجاح: ${created.name} (${created.role === 'worker' ? 'عامل' : 'بقالة'})`);
+    alert(`✅ تم إنشاء حساب جديد بنجاح: ${created.name} (${created.role === 'admin' ? 'مالك / مدير' : created.role === 'worker' ? 'عامل ميداني' : 'صاحب بقالة'})`);
   };
 
   const handleDeleteUser = (userId: string) => {
-    if (userId === 'usr_admin_younis') {
-      alert('لا يمكن حذف حساب مدير النظام الرئيسي!');
+    if (userId === 'usr_admin_younis' || userId === 'usr_admin_mohannad') {
+      alert('لا يمكن حذف حسابات مدراء النظام الرئيسيين (يونس العفيف ومهند الأحمدي)!');
       return;
     }
     if (window.confirm('هل أنت متأكد من حذف هذا الحساب؟')) {
@@ -368,21 +372,21 @@ export const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
                     <label className="block text-xs font-medium text-slate-700 mb-1">الدور والصلاحية *</label>
                     <select
                       value={newUserRole}
-                      onChange={(e) => setNewUserRole(e.target.value as 'worker' | 'grocery')}
-                      className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-xl focus:outline-none font-bold"
+                      onChange={(e) => setNewUserRole(e.target.value as 'admin' | 'worker' | 'grocery')}
+                      className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-xl focus:outline-none font-bold text-[#0c2461]"
                     >
-                      <option value="worker">عامل ميداني (تسجيل الشراء والفرز)</option>
-                      <option value="grocery">صاحب بقالة (قراءة مسحوباته فقط)</option>
+                      <option value="admin">مالك / مدير عام (كامل الصلاحيات والإدارة)</option>
+                      <option value="worker">عامل ميداني (تسجيل الشراء وفرز الصباح)</option>
+                      <option value="grocery">صاحب بقالة / عميل (قراءة حسابه وفواتيره فقط)</option>
                     </select>
                   </div>
 
                   <div>
-                    <label className="block text-xs font-medium text-slate-700 mb-1">رمز الدخول (PIN) *</label>
+                    <label className="block text-xs font-medium text-slate-700 mb-1">كلمة المرور / رمز الدخول (PIN)</label>
                     <input
                       type="text"
-                      required
-                      maxLength={8}
-                      placeholder="مثال: 5544"
+                      maxLength={25}
+                      placeholder="اتركه فارغاً ليصبح رقم الهاتف تلقائياً"
                       value={newUserPin}
                       onChange={(e) => setNewUserPin(e.target.value)}
                       className="w-full px-3 py-2 text-xs font-mono font-bold text-center bg-white border border-slate-300 rounded-xl focus:outline-none"
@@ -609,8 +613,8 @@ CREATE TABLE IF NOT EXISTS vouchers (
 -- إدراج مدراء النظام (يونس العفيف و مهند الأحمدي)
 INSERT INTO users (id, name, phone, country_code, role, pin, active)
 VALUES 
-  ('usr_admin_younis', 'يونس العفيف (مدير النظام)', '772317950', '+967', 'admin', '7723', true),
-  ('usr_admin_mohannad', 'مهند الأحمدي (مدير النظام)', '772178969', '+967', 'admin', '7721', true)
+  ('usr_admin_younis', 'يونس العفيف (مدير النظام)', '772317950', '+967', 'admin', '772317950', true),
+  ('usr_admin_mohannad', 'مهند الأحمدي (مدير النظام)', '772178969', '+967', 'admin', '772178969', true)
 ON CONFLICT (phone) DO NOTHING;`);
                     alert('✅ تم نسخ كود SQL لإنشاء جداول Supabase بنجاح!');
                   }}

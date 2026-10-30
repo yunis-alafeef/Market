@@ -396,6 +396,11 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
               <span className="text-xs font-mono bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md font-bold whitespace-nowrap">
                 {sheet.date}
               </span>
+              {sheet.notes?.includes('وردية الليل') && (
+                <span className="text-xs bg-indigo-50 text-indigo-700 font-bold px-2 py-0.5 rounded-full flex items-center gap-1 whitespace-nowrap">
+                  🌙 وردية الليل (تجهيز الغد)
+                </span>
+              )}
               {sheet.nightOrdersSaved ? (
                 <span className="text-xs bg-emerald-50 text-[#009432] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 whitespace-nowrap">
                   <CheckCircle2 className="w-3.5 h-3.5" />

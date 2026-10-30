@@ -18,7 +18,7 @@ import {
   AuthSession,
   UserAccount,
 } from './types';
-import { StorageService, getArabicDayName } from './services/storage';
+import { StorageService, getArabicDayName, getEffectiveMarketDate } from './services/storage';
 import { AuthService } from './services/auth';
 import { Header } from './components/Header';
 import { WorkerView } from './components/WorkerView';
@@ -91,11 +91,37 @@ export default function App() {
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>(() => StorageService.getAuditLogs());
   const [settings, setSettings] = useState<SystemSettings>(() => StorageService.getSettings());
 
-  // Current active date for worker worksheet (allows editing past days with date retention!)
+  // Current active date for worker worksheet (dynamically rolls over to today or tomorrow's night shift)
   const [currentWorksheetDate, setCurrentWorksheetDate] = useState<string>(() => {
-    const sheets = StorageService.getDailySheets();
-    return sheets[0]?.date || new Date().toISOString().split('T')[0];
+    return getEffectiveMarketDate().dateStr;
   });
+
+  // Automatic daily update & night rollover check (handles midnight and 18:00 night shift rollover)
+  useEffect(() => {
+    const checkMarketRollover = () => {
+      const effective = getEffectiveMarketDate();
+      const updatedSheets = StorageService.getDailySheets();
+      setDailySheets(updatedSheets);
+
+      // If user hasn't explicitly navigated to an older past sheet, keep them on the active market sheet
+      setCurrentWorksheetDate((prevDate) => {
+        // If the date is older than today or night shift, auto-advance
+        if (prevDate < effective.actualDateStr) {
+          return effective.dateStr;
+        }
+        return prevDate;
+      });
+    };
+
+    checkMarketRollover();
+    const timer = setInterval(checkMarketRollover, 30000); // Check every 30 seconds
+    window.addEventListener('focus', checkMarketRollover);
+
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('focus', checkMarketRollover);
+    };
+  }, []);
 
   // Modal States
   const [isVoucherModalOpen, setIsVoucherModalOpen] = useState(false);

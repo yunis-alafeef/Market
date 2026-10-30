@@ -11,7 +11,7 @@ export const INITIAL_ADMIN_USER: UserAccount = {
   countryCode: '+967',
   username: '772317950',
   role: 'admin',
-  pin: '7723',
+  pin: '772317950', // Password is phone number
   avatarBadge: 'ي',
   active: true,
   createdAt: '2026-10-29',
@@ -25,59 +25,73 @@ export const INITIAL_ADMIN_MOHANNAD: UserAccount = {
   countryCode: '+967',
   username: '772178969',
   role: 'admin',
-  pin: '7721',
+  pin: '772178969', // Password is phone number
   avatarBadge: 'م',
   active: true,
   createdAt: '2026-10-29',
 };
 
-// Default initial accounts created by system
+// Default initial accounts created by system: Only Younis & Mohannad as Admins
 export const INITIAL_SYSTEM_USERS: UserAccount[] = [
   INITIAL_ADMIN_USER,
   INITIAL_ADMIN_MOHANNAD,
-  {
-    id: 'usr_worker_field',
-    name: 'عامل المشتريات الميداني',
-    phone: '771234567',
-    countryCode: '+967',
-    username: '771234567',
-    role: 'worker',
-    pin: '8888',
-    avatarBadge: 'ع',
-    active: true,
-    createdAt: '2026-10-29',
-  },
-  {
-    id: 'usr_grocery_salah',
-    name: 'صلاح العماري (بقالة الصلاح)',
-    phone: '773456789',
-    countryCode: '+967',
-    username: '773456789',
-    role: 'grocery',
-    pin: '1111',
-    groceryId: 'g1',
-    avatarBadge: 'ص',
-    active: true,
-    createdAt: '2026-10-29',
-  },
 ];
 
 export const AuthService = {
   getUsers(): UserAccount[] {
     try {
       const raw = localStorage.getItem(USERS_STORAGE_KEY);
-      if (!raw) {
-        localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(INITIAL_SYSTEM_USERS));
-        return INITIAL_SYSTEM_USERS;
+      let users: UserAccount[] = raw ? JSON.parse(raw) : INITIAL_SYSTEM_USERS;
+
+      // Filter out deleted demo accounts (worker & old grocery)
+      users = users.filter(
+        (u) =>
+          u.id !== 'usr_worker_field' &&
+          u.id !== 'usr_grocery_salah' &&
+          u.phone !== '771234567' &&
+          u.phone !== '773456789'
+      );
+
+      // Ensure Younis has admin role and his phone as PIN
+      let younisIndex = users.findIndex(
+        (u) => u.id === 'usr_admin_younis' || u.phone === '772317950'
+      );
+      if (younisIndex >= 0) {
+        users[younisIndex] = {
+          ...users[younisIndex],
+          id: 'usr_admin_younis',
+          name: 'يونس العفيف (مدير النظام)',
+          phone: '772317950',
+          username: '772317950',
+          role: 'admin',
+          pin: '772317950',
+          active: true,
+        };
+      } else {
+        users.unshift(INITIAL_ADMIN_USER);
       }
-      const parsed: UserAccount[] = JSON.parse(raw);
-      // Auto-merge Mohannad Al-Ahmadi if missing from previous session
-      if (!parsed.some((u) => u.phone === '772178969' || u.id === 'usr_admin_mohannad')) {
-        const merged = [INITIAL_ADMIN_USER, INITIAL_ADMIN_MOHANNAD, ...parsed.filter((u) => u.id !== 'usr_admin_younis')];
-        localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(merged));
-        return merged;
+
+      // Ensure Mohannad has admin role and his phone as PIN
+      let mohannadIndex = users.findIndex(
+        (u) => u.id === 'usr_admin_mohannad' || u.phone === '772178969'
+      );
+      if (mohannadIndex >= 0) {
+        users[mohannadIndex] = {
+          ...users[mohannadIndex],
+          id: 'usr_admin_mohannad',
+          name: 'مهند الأحمدي (مدير النظام)',
+          phone: '772178969',
+          username: '772178969',
+          role: 'admin',
+          pin: '772178969',
+          active: true,
+        };
+      } else {
+        users.splice(1, 0, INITIAL_ADMIN_MOHANNAD);
       }
-      return parsed;
+
+      localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(users));
+      return users;
     } catch {
       return INITIAL_SYSTEM_USERS;
     }

@@ -66,6 +66,77 @@ export function getArabicDayName(dateString: string): string {
   return days[d.getDay()] || 'اليوم';
 }
 
+/**
+ * Calculates the effective market date for wholesale produce:
+ * - If current time is night shift (>= 18:00 / 6:00 PM), rolls over to next morning's market day.
+ * - Otherwise (daytime before 18:00), effective market date is today.
+ * - Accurate for Yemen timezone (Asia/Riyadh, UTC+3) or local client time.
+ */
+export function getEffectiveMarketDate(rolloverHour = 18): {
+  dateStr: string;
+  dayName: string;
+  isNightShift: boolean;
+  actualDateStr: string;
+  actualDayName: string;
+} {
+  const now = new Date();
+  let year = now.getFullYear();
+  let month = now.getMonth();
+  let day = now.getDate();
+  let hours = now.getHours();
+
+  try {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Riyadh',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      hour12: false,
+    }).formatToParts(now);
+
+    const pMap: Record<string, string> = {};
+    parts.forEach((p) => {
+      pMap[p.type] = p.value;
+    });
+
+    if (pMap.year && pMap.month && pMap.day && pMap.hour) {
+      year = parseInt(pMap.year, 10);
+      month = parseInt(pMap.month, 10) - 1;
+      day = parseInt(pMap.day, 10);
+      hours = parseInt(pMap.hour, 10);
+    }
+  } catch {
+    // fallback to local browser time
+  }
+
+  const currentDateObj = new Date(year, month, day, 12, 0, 0);
+  const actualDateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  const actualDayName = getArabicDayName(actualDateStr);
+
+  const isNightShift = hours >= rolloverHour;
+
+  let targetDateObj = currentDateObj;
+  if (isNightShift) {
+    // Advance to tomorrow for evening vegetable market preparation
+    targetDateObj = new Date(year, month, day + 1, 12, 0, 0);
+  }
+
+  const tYear = targetDateObj.getFullYear();
+  const tMonth = targetDateObj.getMonth() + 1;
+  const tDay = targetDateObj.getDate();
+  const dateStr = `${tYear}-${String(tMonth).padStart(2, '0')}-${String(tDay).padStart(2, '0')}`;
+  const dayName = getArabicDayName(dateStr);
+
+  return {
+    dateStr,
+    dayName,
+    isNightShift,
+    actualDateStr,
+    actualDayName,
+  };
+}
+
 // Generate clean fresh rows with 0 initial quantity for a new day
 export function generateCleanRows(items: VegetableItem[], suppliers: Supplier[], groceries: Grocery[], dateStr: string): DailyOrderRow[] {
   return items.map((item, index) => {
@@ -103,28 +174,28 @@ export function generateCleanRows(items: VegetableItem[], suppliers: Supplier[],
   });
 }
 
-// Clean production daily sheets - starts fresh with today's sheet
+// Clean production daily sheets - starts fresh with effective market day (today or tomorrow night shift)
 export function getInitialDailySheets(): DailySheet[] {
-  const todayStr = new Date().toISOString().split('T')[0];
-  const dayName = getArabicDayName(todayStr);
-
-  const cleanRows = generateCleanRows(INITIAL_ITEMS, INITIAL_SUPPLIERS, INITIAL_GROCERIES, todayStr);
+  const effective = getEffectiveMarketDate();
+  const cleanRows = generateCleanRows(INITIAL_ITEMS, INITIAL_SUPPLIERS, INITIAL_GROCERIES, effective.dateStr);
 
   return [
     {
-      id: `sheet_${todayStr}`,
-      date: todayStr,
-      dayName,
+      id: `sheet_${effective.dateStr}`,
+      date: effective.dateStr,
+      dayName: effective.dayName,
       status: 'open',
       rows: cleanRows,
       totalCost: 0,
       totalSale: 0,
       totalProfit: 0,
-      notes: 'كشف اليومية الافتتاحي - جاهز لتسجيل طلبات الليل والمشتريات الميدانية',
+      notes: effective.isNightShift
+        ? `كشف اليومية الافتتاحي - وردية الليل لتجهيز مشتريات ${effective.dayName}`
+        : `كشف اليومية الافتتاحي ليوم ${effective.dayName}`,
       nightOrdersSaved: false,
       morningSortGenerated: false,
-      createdAt: `${todayStr} 00:00:00`,
-      updatedAt: `${todayStr} 00:00:00`,
+      createdAt: `${effective.dateStr} 00:00:00`,
+      updatedAt: `${effective.dateStr} 00:00:00`,
     },
   ];
 }
@@ -187,7 +258,50 @@ export const StorageService = {
   },
 
   getDailySheets(): DailySheet[] {
-    return loadFromStorage(STORAGE_KEYS.DAILY_SHEETS, getInitialDailySheets());
+    const effective = getEffectiveMarketDate();
+    let sheets = loadFromStorage<DailySheet[]>(STORAGE_KEYS.DAILY_SHEETS, []);
+
+    if (!Array.isArray(sheets) || sheets.length === 0) {
+      sheets = getInitialDailySheets();
+      saveToStorage(STORAGE_KEYS.DAILY_SHEETS, sheets);
+      return sheets;
+    }
+
+    // Check if the current effective market sheet exists
+    const exists = sheets.some((s) => s.date === effective.dateStr);
+
+    if (!exists) {
+      // Auto-create new sheet for the effective market date
+      const items = this.getItems();
+      const suppliers = this.getSuppliers();
+      const groceries = this.getGroceries();
+      const cleanRows = generateCleanRows(items, suppliers, groceries, effective.dateStr);
+
+      const effectiveSheet: DailySheet = {
+        id: `sheet_${effective.dateStr}`,
+        date: effective.dateStr,
+        dayName: effective.dayName,
+        status: 'open',
+        rows: cleanRows,
+        totalCost: 0,
+        totalSale: 0,
+        totalProfit: 0,
+        notes: effective.isNightShift
+          ? `كشف اليومية - وردية الليل لتجهيز مشتريات ${effective.dayName}`
+          : `كشف اليومية الرسمي ليوم ${effective.dayName}`,
+        nightOrdersSaved: false,
+        morningSortGenerated: false,
+        createdAt: `${effective.dateStr} 00:00:00`,
+        updatedAt: `${effective.dateStr} 00:00:00`,
+      };
+
+      sheets = [effectiveSheet, ...sheets];
+      saveToStorage(STORAGE_KEYS.DAILY_SHEETS, sheets);
+    }
+
+    // Sort sheets by date descending so the latest date is always at the top
+    sheets.sort((a, b) => b.date.localeCompare(a.date));
+    return sheets;
   },
   saveDailySheets(sheets: DailySheet[]): void {
     saveToStorage(STORAGE_KEYS.DAILY_SHEETS, sheets);
