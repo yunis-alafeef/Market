@@ -458,6 +458,7 @@ export default function App() {
           <AdminReportsView
             dailySheets={dailySheets}
             groceries={groceries}
+            suppliers={suppliers}
             settings={settings}
             onEditDayComprehensive={handleEditDayComprehensive}
             onOpenPrintModal={(type, sheet) => {

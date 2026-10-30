@@ -356,6 +356,24 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
 
   const totalUnits = sheet.rows.reduce((sum, r) => sum + r.totalQuantity, 0);
   const purchasedRowsCount = sheet.rows.filter((r) => r.status === 'purchased').length;
+  const uniqueSuppliersCount = new Set(sheet.rows.map((r) => r.supplierId).filter(Boolean)).size;
+
+  // Per-grocery calculated quantities and monetary values
+  const groceryTotals = groceries.map((g) => {
+    let totalQty = 0;
+    let totalAmount = 0;
+    sheet.rows.forEach((row) => {
+      const q = Number(row.quantities[g.id]) || 0;
+      totalQty += q;
+      totalAmount += q * (Number(row.salePrice) || 0);
+    });
+    return {
+      groceryId: g.id,
+      grocery: g,
+      totalQty: Math.round(totalQty * 100) / 100,
+      totalAmount: Math.round(totalAmount * 100) / 100,
+    };
+  });
 
   // Available master products not yet present in today's sheet
   const availableItemsToAdd = items.filter(
@@ -576,6 +594,50 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
       {/* TAB 1: NIGHT ORDERS (CARDS OR TABLE) */}
       {activeTab === 'night_orders' && (
         <>
+          {/* Live Grocery Billing Overview Strip (Visible for both table and cards) */}
+          <div className="bg-gradient-to-r from-slate-900 via-[#0c2461] to-[#006266] text-white p-3.5 rounded-2xl shadow-sm border border-slate-800">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-2 pb-2 border-b border-white/10">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse"></span>
+                <span className="text-xs sm:text-sm font-black text-amber-300">
+                  إجماليات فواتير البقالات بالكشف الحالي:
+                </span>
+                <span className="text-[11px] text-slate-300 font-medium">
+                  (يتم التحديث المباشر فور تعديل الكمية أو السعر)
+                </span>
+              </div>
+              <div className="text-xs font-mono font-bold bg-white/10 px-2.5 py-1 rounded-xl text-amber-200">
+                إجمالي التوزيع العام: {sheet.totalSale.toLocaleString()} ر.س
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
+              {groceryTotals.map((gt) => (
+                <div
+                  key={gt.groceryId}
+                  className="bg-white/10 hover:bg-white/15 transition-colors p-2 rounded-xl border border-white/10 flex flex-col justify-between"
+                >
+                  <div className="flex items-center justify-between gap-1 text-xs mb-1">
+                    <span className="font-black text-amber-300 bg-black/20 px-1.5 py-0.5 rounded text-[11px]">
+                      {gt.grocery.code}
+                    </span>
+                    <span className="text-slate-200 font-bold truncate text-[11px]" title={gt.grocery.name}>
+                      {gt.grocery.name.replace('بقالة', '').replace('سوبرماركت', '')}
+                    </span>
+                  </div>
+                  <div className="flex items-baseline justify-between mt-0.5">
+                    <span className="text-xs font-mono font-black text-white tabular-nums">
+                      {gt.totalAmount.toLocaleString()} <span className="text-[9px] font-normal text-amber-300">ر.س</span>
+                    </span>
+                    <span className="text-[10px] font-mono text-slate-300 tabular-nums">
+                      {gt.totalQty} وحدة
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
           {/* MODE A: MOBILE TOUCH CARDS (Designed specifically for Mobile Ergonomics!) */}
           {viewMode === 'cards' ? (
             <div className="space-y-4">
@@ -583,21 +645,19 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
               <div className="bg-white rounded-2xl p-3 border border-slate-200 shadow-xs">
                 <div className="flex items-center justify-between text-xs font-bold text-slate-700 mb-2">
                   <span>اختر البقالة لضبط كمياتها عبر أزرار الرفع والإنقاص:</span>
-                  <span className="text-[#006266] font-mono">
-                    {sheet.rows.reduce(
-                      (sum, r) => sum + (r.quantities[activeCardGroceryId] || 0),
-                      0
-                    )}{' '}
-                    وحدة للبقالة المحددة
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-slate-500 font-mono text-xs">
+                      كمية: <strong className="text-[#006266] font-bold">{groceryTotals.find(gt => gt.groceryId === activeCardGroceryId)?.totalQty || 0} وحدة</strong>
+                    </span>
+                    <span className="text-amber-800 bg-amber-100 font-mono text-xs px-2 py-0.5 rounded-lg font-black">
+                      فاتورة: {(groceryTotals.find(gt => gt.groceryId === activeCardGroceryId)?.totalAmount || 0).toLocaleString()} ر.س
+                    </span>
+                  </div>
                 </div>
                 <div className="flex items-center gap-2 overflow-x-auto scrollbar-thin pb-1">
                   {groceries.map((g) => {
                     const isSelected = activeCardGroceryId === g.id;
-                    const totalForG = sheet.rows.reduce(
-                      (sum, r) => sum + (r.quantities[g.id] || 0),
-                      0
-                    );
+                    const gTotal = groceryTotals.find((gt) => gt.groceryId === g.id);
 
                     return (
                       <button
@@ -622,10 +682,10 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
                         <span>{g.name.replace('بقالة', '').replace('سوبرماركت', '')}</span>
                         <span
                           className={`px-1.5 py-0.5 rounded-md font-mono text-[11px] ${
-                            isSelected ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
+                            isSelected ? 'bg-white/20 text-white font-bold' : 'bg-slate-200 text-slate-700'
                           }`}
                         >
-                          {totalForG}
+                          {(gTotal?.totalAmount || 0).toLocaleString()} ر.س
                         </span>
                       </button>
                     );
@@ -872,19 +932,28 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
                       </th>
                       <th className="p-3 font-bold min-w-[160px] whitespace-nowrap">المورد</th>
                       {/* Grocery Columns */}
-                      {groceries.map((g) => (
-                        <th
-                          key={g.id}
-                          className="p-2 text-center border-r border-[#1e3799] font-bold min-w-[95px] bg-[#0c2461]/90"
-                        >
-                          <div className="text-sm font-black text-[#f6b93b] whitespace-nowrap">
-                            {g.code}
-                          </div>
-                          <div className="text-[10px] text-slate-300 font-normal truncate max-w-[80px] mx-auto whitespace-nowrap">
-                            {g.name.replace('بقالة', '').replace('سوبرماركت', '')}
-                          </div>
-                        </th>
-                      ))}
+                      {groceries.map((g) => {
+                        const gTotal = groceryTotals.find((gt) => gt.groceryId === g.id);
+                        return (
+                          <th
+                            key={g.id}
+                            className="p-2 text-center border-r border-[#1e3799] font-bold min-w-[105px] bg-[#0c2461]/95"
+                          >
+                            <div className="text-sm font-black text-[#f6b93b] whitespace-nowrap">
+                              {g.code}
+                            </div>
+                            <div className="text-[11px] text-slate-200 font-semibold truncate max-w-[95px] mx-auto whitespace-nowrap">
+                              {g.name.replace('بقالة', '').replace('سوبرماركت', '')}
+                            </div>
+                            <div className="mt-1 bg-amber-400 text-[#0c2461] px-1.5 py-0.5 rounded text-[10px] font-black tabular-nums shadow-xs">
+                              {(gTotal?.totalAmount || 0).toLocaleString()} ر.س
+                            </div>
+                            <div className="text-[9px] text-slate-300 font-mono mt-0.5">
+                              {gTotal?.totalQty || 0} وحدة
+                            </div>
+                          </th>
+                        );
+                      })}
                       <th className="p-3 text-center font-bold bg-[#1e3799]/80 min-w-[70px] whitespace-nowrap">
                         المجموع
                       </th>
@@ -1049,7 +1118,74 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
                     ))}
                   </tbody>
                   <tfoot>
-                    <tr className="bg-slate-50 border-t-2 border-slate-200">
+                    {/* Row 1: Comprehensive Column Totals */}
+                    <tr className="bg-slate-100/95 border-t-2 border-[#0c2461] font-bold text-xs select-none shadow-xs">
+                      <td className="p-2.5 text-center font-black text-[#0c2461]">
+                        الإجمالي
+                      </td>
+                      <td className="p-2.5 font-black text-slate-900 sticky right-0 bg-slate-100 z-10 border-l border-slate-300 whitespace-nowrap shadow-xs">
+                        <span>{sheet.rows.length} أصناف</span>
+                      </td>
+                      <td className="p-2 text-slate-600 font-semibold text-xs whitespace-nowrap">
+                        {uniqueSuppliersCount} موردين
+                      </td>
+
+                      {/* Per-Grocery Column Totals */}
+                      {groceries.map((g) => {
+                        const gTotal = groceryTotals.find((gt) => gt.groceryId === g.id);
+                        return (
+                          <td
+                            key={g.id}
+                            className="p-2 text-center border-r border-slate-200 bg-amber-50/90 font-mono"
+                          >
+                            <div className="text-xs font-black text-[#0c2461] tabular-nums whitespace-nowrap">
+                              {(gTotal?.totalAmount || 0).toLocaleString()}{' '}
+                              <span className="text-[10px] font-bold text-amber-800">ر.س</span>
+                            </div>
+                            <div className="text-[11px] font-bold text-slate-700 tabular-nums whitespace-nowrap mt-0.5">
+                              {gTotal?.totalQty || 0}{' '}
+                              <span className="text-[9px] font-normal text-slate-500">وحدة</span>
+                            </div>
+                          </td>
+                        );
+                      })}
+
+                      {/* Total Units Across All Groceries */}
+                      <td className="p-2.5 text-center font-mono font-black text-sm bg-slate-200/90 text-[#006266] tabular-nums whitespace-nowrap">
+                        <div>{totalUnits.toLocaleString()}</div>
+                        <div className="text-[9px] font-normal text-slate-600">وحدة</div>
+                      </td>
+
+                      {/* Total Purchase Cost */}
+                      {settings.permissions.workerCanViewPurchaseCost && (
+                        <td className="p-2 text-center font-mono font-black text-xs text-slate-800 tabular-nums whitespace-nowrap bg-slate-200/50">
+                          <div>{sheet.totalCost.toLocaleString()}</div>
+                          <div className="text-[9px] font-normal text-slate-600">ر.س شراء</div>
+                        </td>
+                      )}
+
+                      {/* Total Sale Value */}
+                      <td className="p-2 text-center font-mono font-black text-xs text-[#0c2461] tabular-nums whitespace-nowrap bg-amber-100/80 border-x border-amber-300">
+                        <div className="text-sm font-black text-[#0c2461]">
+                          {sheet.totalSale.toLocaleString()} <span className="text-[10px]">ر.س</span>
+                        </div>
+                        <div className="text-[9px] font-bold text-[#009432]">
+                          ربح: +{(sheet.totalSale - sheet.totalCost).toLocaleString()} ر.س
+                        </div>
+                      </td>
+
+                      {/* Purchase completion */}
+                      <td className="p-2 text-center whitespace-nowrap">
+                        <span className="inline-block px-2 py-0.5 rounded text-[11px] font-black bg-[#009432]/15 text-[#009432]">
+                          {purchasedRowsCount}/{sheet.rows.length} تم
+                        </span>
+                      </td>
+
+                      <td className="p-2 text-center text-slate-400 font-bold">-</td>
+                    </tr>
+
+                    {/* Row 2: Actions and Quick Add Product buttons */}
+                    <tr className="bg-slate-50 border-t border-slate-200">
                       <td
                         colSpan={groceries.length + (settings.permissions.workerCanViewPurchaseCost ? 6 : 5)}
                         className="p-3 text-right"
