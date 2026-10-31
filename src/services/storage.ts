@@ -304,6 +304,8 @@ async function pushNow(key: string): Promise<void> {
       let changedRecords = (memCache[key] as any[]).filter(
         (e) => e && e.id != null && snap[String(e.id)] !== local[String(e.id)]
       );
+      // Unique ids per batch (a duplicate id in one upsert is rejected by Postgres)
+      changedRecords = Array.from(new Map(changedRecords.map((e) => [String(e.id), e])).values());
       if (NEWEST_FIRST.includes(key)) changedRecords = [...changedRecords].reverse();
       const now = new Date().toISOString();
       for (const part of chunk(changedRecords, 200)) {
