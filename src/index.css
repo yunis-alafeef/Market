@@ -370,22 +370,60 @@ body {
 }
 
 /* Print styling for professional PDF & invoices */
+@page {
+  size: A4 portrait;
+  margin: 8mm 8mm 8mm 8mm;
+}
+
 @media print {
+  html,
   body {
     background: #ffffff !important;
     color: #000000 !important;
     padding: 0 !important;
     margin: 0 !important;
-    font-size: 10pt !important;
+    width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
+    font-size: 9.5pt !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 
+  /* Hide background elements, navigation, buttons */
   .no-print,
   nav,
   header,
   footer,
   button,
-  .print-hide {
+  .print-hide,
+  .fixed.bottom-0 {
     display: none !important;
+  }
+
+  /* Modal unwrap for print */
+  .print-modal-backdrop {
+    position: static !important;
+    background: #ffffff !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+    display: block !important;
+    width: 100% !important;
+    height: auto !important;
+  }
+
+  .print-modal-content {
+    width: 100% !important;
+    max-width: 100% !important;
+    border: none !important;
+    box-shadow: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    border-radius: 0 !important;
+    background: transparent !important;
   }
 
   .printable-area {
@@ -395,19 +433,29 @@ body {
     padding: 0 !important;
     box-shadow: none !important;
     border: none !important;
+    overflow: visible !important;
   }
 
   table {
     page-break-inside: auto;
     width: 100% !important;
+    border-collapse: collapse !important;
   }
+
   tr {
-    page-break-inside: avoid;
-    page-break-after: auto;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
   }
+
+  .print-avoid-break {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
   thead {
     display: table-header-group;
   }
+
   tfoot {
     display: table-footer-group;
   }

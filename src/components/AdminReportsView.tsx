@@ -545,6 +545,22 @@ export const AdminReportsView: React.FC<AdminReportsViewProps> = ({
                       {sheet.totalSale.toLocaleString()} ر.س
                     </span>
                   </div>
+
+                  <div
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onEditDayComprehensive(sheet);
+                    }}
+                    className={`mt-2 py-1 px-2 rounded-lg text-[10px] font-bold text-center flex items-center justify-center gap-1 transition-colors ${
+                      isSelected
+                        ? 'bg-amber-400 text-slate-900 hover:bg-amber-300'
+                        : 'bg-purple-50 text-purple-700 hover:bg-purple-700 hover:text-white'
+                    }`}
+                    title="تعديل كشف هذا اليوم في شاشة الكشف اليومي"
+                  >
+                    <Edit3 className="w-3 h-3" />
+                    <span>تعديل هذا الكشف</span>
+                  </div>
                 </button>
               );
             })}
@@ -943,6 +959,7 @@ export const AdminReportsView: React.FC<AdminReportsViewProps> = ({
                           <th className="p-3 text-center font-bold">إجمالي المبيعات</th>
                           <th className="p-3 text-center font-bold">صافي الربح</th>
                           <th className="p-3 text-center font-bold">الحالة</th>
+                          <th className="p-3 text-center font-bold w-24">إجراءات</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -980,6 +997,20 @@ export const AdminReportsView: React.FC<AdminReportsViewProps> = ({
                               >
                                 {sheet.status === 'settled' ? 'مقفل ومعتمد' : 'مفتوح'}
                               </span>
+                            </td>
+                            <td className="p-3 text-center">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setIsPeriodModalOpen(false);
+                                  onEditDayComprehensive(sheet);
+                                }}
+                                className="px-2.5 py-1 text-xs font-bold text-white bg-purple-700 hover:bg-purple-800 rounded-lg transition-colors flex items-center justify-center gap-1 cursor-pointer whitespace-nowrap mx-auto"
+                                title="تعديل هذا اليوم في شاشة الكشف اليومي"
+                              >
+                                <Edit3 className="w-3 h-3 text-amber-300" />
+                                <span>تعديل</span>
+                              </button>
                             </td>
                           </tr>
                         ))}

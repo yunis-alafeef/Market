@@ -357,14 +357,43 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
     alert('✅ [🌙 تم حفظ طلبات الليل وتثبيت الجدول السفلي وبطاقات الفرز بنجاح!]');
   };
 
-  // Settle and transfer purchases handler
+  // Settle and transfer purchases handler with strict zero-value validation
   const handleSettleAndReset = () => {
-    if (sheet.rows.length === 0 || sheet.rows.every((r) => (r.totalQuantity || 0) === 0)) {
-      if (!window.confirm('الكشف فارغ حالياً. هل أنت متأكد من حفظ الشراء وترحيل الحسابات؟')) return;
-    } else {
-      if (!window.confirm(`هل أنت متأكد من حفظ الشراء وترحيل حسابات اليوم (${sheet.dayName} ${sheet.date})؟\nسيتم نقل الفواتير إلى كشوفات البقالات والموردين وتصفير الحقول ليوم جديد.`)) {
-        return;
-      }
+    // 1. Identify all items with ordered quantities
+    const activeOrderRows = sheet.rows.filter((r) => {
+      const qTotal = Number(r.totalQuantity) || 0;
+      const anyGroceryQty = Object.values(r.quantities || {}).some((q) => (Number(q) || 0) > 0);
+      return qTotal > 0 || anyGroceryQty;
+    });
+
+    if (activeOrderRows.length === 0) {
+      alert('⚠️ الكشف فارغ تماماً من أي كميات مسجلة! يرجى إدخال كميات البقالات أولاً قبل الترحيل.');
+      return;
+    }
+
+    // 2. Strict Check: Reject settling if any active item has salePrice <= 0 or costPrice <= 0
+    const zeroPriceItems = activeOrderRows.filter(
+      (r) => (Number(r.salePrice) || 0) <= 0 || (Number(r.costPrice) || 0) <= 0
+    );
+
+    if (zeroPriceItems.length > 0) {
+      const detailsList = zeroPriceItems
+        .map((r) => `• ${r.itemName} (${r.unit}): كمية [${r.totalQuantity}] - سعر الشراء: [${r.costPrice || 0} ر.س] | سعر البيع: [${r.salePrice || 0} ر.س]`)
+        .join('\n');
+
+      alert(
+        `⛔ لا يمكن ترحيل الحسابات والقيمة لا زالت صفر!\n\nيوجد (${zeroPriceItems.length}) منتجات مطلوبة ولكن سعرها ما زال صفراً:\n\n${detailsList}\n\nيرجى تعبئة الفراغ وتحديد سعر الشراء وسعر البيع لكل صنف أعلاه قبل إتمام الترحيل.`
+      );
+      return;
+    }
+
+    // 3. Confirm and Settle
+    if (
+      !window.confirm(
+        `هل أنت متأكد من حفظ الشراء وترحيل حسابات اليوم (${sheet.dayName} ${sheet.date})؟\nسيتم نقل الفواتير إلى كشوفات البقالات والموردين والنسخ الاحتياطي في سوبابيز وتصفير الحقول ليوم جديد.`
+      )
+    ) {
+      return;
     }
 
     if (onSettleSheet) {

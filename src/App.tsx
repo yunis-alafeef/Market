@@ -20,6 +20,7 @@ import {
 } from './types';
 import { StorageService, getArabicDayName, getEffectiveMarketDate } from './services/storage';
 import { AuthService } from './services/auth';
+import { SupabaseBackupService } from './services/supabaseBackup';
 import { Header } from './components/Header';
 import { WorkerView } from './components/WorkerView';
 import { AdminReportsView } from './components/AdminReportsView';
@@ -108,6 +109,8 @@ export default function App() {
 
       // If user hasn't explicitly navigated to an older past sheet, keep them on the active market sheet
       setCurrentWorksheetDate((prevDate) => {
+        // Do not auto-advance if Manager is editing a past sheet
+        if (managerEditingDate) return prevDate;
         // If the date is older than today or night shift, auto-advance
         if (prevDate < effective.actualDateStr) {
           return effective.dateStr;
@@ -219,12 +222,14 @@ export default function App() {
   };
 
   // Get or Create Worksheet for Date
+  const targetWorksheetDate = managerEditingDate || currentWorksheetDate;
   const currentSheet =
+    dailySheets.find((s) => s.date === targetWorksheetDate) ||
     dailySheets.find((s) => s.date === currentWorksheetDate) ||
     dailySheets[0] || {
-      id: `sheet_${currentWorksheetDate}`,
-      date: currentWorksheetDate,
-      dayName: getArabicDayName(currentWorksheetDate),
+      id: `sheet_${targetWorksheetDate}`,
+      date: targetWorksheetDate,
+      dayName: getArabicDayName(targetWorksheetDate),
       status: 'open',
       rows: [],
       totalCost: 0,
@@ -308,8 +313,8 @@ export default function App() {
     );
   };
 
-  // Normal Worker Settling: Mark settled, update ledgers, zero out worksheet
-  const handleSettleWorkerSheet = (sheetToSettle: DailySheet) => {
+  // Normal Worker Settling: Mark settled, update ledgers, zero out worksheet, and backup to Supabase
+  const handleSettleWorkerSheet = async (sheetToSettle: DailySheet) => {
     const totalQty = sheetToSettle.rows.reduce((sum, r) => sum + (Number(r.totalQuantity) || 0), 0);
     const settledSheet: DailySheet = {
       ...sheetToSettle,
@@ -333,6 +338,13 @@ export default function App() {
       'مرحل ومقفل ✅',
       `تم ترحيل مبيعات بقيمة ${settledSheet.totalSale.toLocaleString()} ر.س ومشتريات بقيمة ${settledSheet.totalCost.toLocaleString()} ر.س وإجمالي ${totalQty} وحدة وتصفير الحقول ليوم جديد.`
     );
+
+    // Automatic Daily Backup to Supabase (Requirement)
+    SupabaseBackupService.backupSettledDay(settledSheet, groceries, suppliers, vouchers).then((res) => {
+      if (res.success) {
+        logAudit('نسخ احتياطي سحابي تلقائي', `كشف ${settledSheet.date}`, 'محلي', 'سحابي في Supabase', res.message);
+      }
+    });
 
     // Generate fresh clean blank rows for the new day
     const effective = getEffectiveMarketDate();
@@ -358,7 +370,7 @@ export default function App() {
     setCurrentWorksheetDate(effective.dateStr);
     setManagerEditingDate(null);
 
-    alert('✅ تم ترحيل الشراء والحسابات بنجاح إلى كشوفات المدير وصفحة التقارير، وتصفير الواجهة لتصبح فارغة ونظيفة وجاهزة ليوم جديد!');
+    alert('✅ تم ترحيل الشراء والحسابات بنجاح إلى كشوفات المدير وصفحة التقارير، وتصفير الواجهة لتصبح فارغة ونظيفة وجاهزة ليوم جديد!\n(تم النسخ الاحتياطي التلقائي في سوبابيز ☁️)');
   };
 
   // The KEY REQUIRED FEATURE: "تعديل شامل لليوم"
@@ -376,7 +388,7 @@ export default function App() {
   };
 
   // Manager Save Edit & Resettle with Exact Original Date
-  const handleSaveManagerEditAndResettle = (updatedSheet: DailySheet) => {
+  const handleSaveManagerEditAndResettle = async (updatedSheet: DailySheet) => {
     const finalSheet: DailySheet = {
       ...updatedSheet,
       date: managerEditingDate || updatedSheet.date, // Preserve exact original date
@@ -396,9 +408,16 @@ export default function App() {
       `تم تحديث الحسابات والأرصدة بأثر رجعي دقيق بنفس تاريخ اليوم الأصلي (${finalSheet.date}) دون تكرار الفواتير.`
     );
 
+    // Automatic Backup to Supabase
+    SupabaseBackupService.backupSettledDay(finalSheet, groceries, suppliers, vouchers).then((res) => {
+      if (res.success) {
+        logAudit('نسخ احتياطي سحابي بعد تعديل اليوم', `كشف ${finalSheet.date}`, 'محلي', 'سحابي في Supabase', res.message);
+      }
+    });
+
     setManagerEditingDate(null);
     setActivePage('reports');
-    alert(`✅ تم حفظ التعديل الشامل وإعادة ترحيل كشف ${finalSheet.dayName} (${finalSheet.date}) بنجاح بنفس تاريخه القديم وتحديث كافة أرصدة البقالات والموردين بدقة!`);
+    alert(`✅ تم حفظ التعديل الشامل وإعادة ترحيل كشف ${finalSheet.dayName} (${finalSheet.date}) بنجاح بنفس تاريخه القديم وتحديث كافة أرصدة البقالات والموردين والنسخ الاحتياطي في سوبابيز بدقة! ☁️`);
   };
 
   // Add Voucher (Receipt or Payment)
