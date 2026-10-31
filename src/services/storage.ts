@@ -1,6 +1,8 @@
-import { Grocery, Supplier, VegetableItem, DailySheet, Voucher, AuditLog, SystemSettings, DailyOrderRow } from '../types';
+﻿import { Grocery, Supplier, VegetableItem, DailySheet, Voucher, AuditLog, SystemSettings, DailyOrderRow } from '../types';
 
-const STORAGE_KEYS = {
+import { supabase } from './supabase';
+
+export const STORAGE_KEYS = {
   GROCERIES: 'veg_app_groceries_clean_v2',
   SUPPLIERS: 'veg_app_suppliers_clean_v2',
   ITEMS: 'veg_app_items_clean_v2',
@@ -213,9 +215,54 @@ export function loadFromStorage<T>(key: string, defaultValue: T): T {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Cloud sync (Supabase table `app_kv`): every stored collection is mirrored to
+// the database so all devices see the same data.
+// ---------------------------------------------------------------------------
+const SYNC_KEYS: string[] = Object.values(STORAGE_KEYS);
+const lastSynced: Record<string, string> = {};
+const pushTimers: Record<string, ReturnType<typeof setTimeout>> = {};
+let cloudReady = false;
+
+function canon(v: unknown): string {
+  const sort = (x: any): any => {
+    if (Array.isArray(x)) return x.map(sort);
+    if (x && typeof x === 'object') {
+      return Object.keys(x).sort().reduce((o: any, k) => { o[k] = sort(x[k]); return o; }, {});
+    }
+    return x;
+  };
+  return JSON.stringify(sort(v));
+}
+
+function localCanon(key: string): string | null {
+  const raw = localStorage.getItem(key);
+  if (raw == null) return null;
+  try { return canon(JSON.parse(raw)); } catch { return null; }
+}
+
+function schedulePush(key: string): void {
+  if (!cloudReady || !SYNC_KEYS.includes(key)) return;
+  clearTimeout(pushTimers[key]);
+  pushTimers[key] = setTimeout(async () => {
+    const c = localCanon(key);
+    if (c == null || c === lastSynced[key]) return;
+    try {
+      const { error } = await supabase
+        .from('app_kv')
+        .upsert({ key, value: JSON.parse(localStorage.getItem(key) as string), updated_at: new Date().toISOString() });
+      if (error) console.warn('Supabase app_kv push error:', error.message);
+      else lastSynced[key] = c;
+    } catch (e) {
+      console.warn('Supabase app_kv push failed:', e);
+    }
+  }, 300);
+}
+
 export function saveToStorage<T>(key: string, value: T): void {
   try {
     localStorage.setItem(key, JSON.stringify(value));
+    schedulePush(key);
   } catch (err) {
     console.error(`Failed to save ${key} to storage:`, err);
   }
@@ -326,7 +373,49 @@ export const StorageService = {
     saveToStorage(STORAGE_KEYS.SETTINGS, settings);
   },
 
+  /**
+   * Pull the latest data from Supabase into local storage.
+   * Returns the list of storage keys whose local value changed.
+   */
+  async syncFromCloud(): Promise<string[]> {
+    const changed: string[] = [];
+    try {
+      const { data, error } = await supabase.from('app_kv').select('key,value');
+      if (error) {
+        console.warn('Supabase app_kv load error:', error.message);
+        return changed;
+      }
+      const firstSync = !cloudReady;
+      for (const row of data || []) {
+        const key = row.key as string;
+        if (!SYNC_KEYS.includes(key)) continue;
+        const cloudC = canon(row.value);
+        const localC = localCanon(key);
+        const noUnpushedLocal = localC === lastSynced[key];
+        if (cloudC === localC) {
+          lastSynced[key] = cloudC;
+        } else if (firstSync || noUnpushedLocal) {
+          localStorage.setItem(key, JSON.stringify(row.value));
+          lastSynced[key] = cloudC;
+          changed.push(key);
+        }
+      }
+      if (firstSync) {
+        cloudReady = true;
+        // Keys that do not exist in the cloud yet are uploaded from this device
+        SYNC_KEYS.forEach((k) => schedulePush(k));
+      }
+    } catch (e) {
+      console.warn('Supabase app_kv sync failed:', e);
+    }
+    return changed;
+  },
+
   resetAllData(): void {
+    SYNC_KEYS.forEach((k) => {
+      delete lastSynced[k];
+      void supabase.from('app_kv').delete().eq('key', k);
+    });
     localStorage.removeItem(STORAGE_KEYS.GROCERIES);
     localStorage.removeItem(STORAGE_KEYS.SUPPLIERS);
     localStorage.removeItem(STORAGE_KEYS.ITEMS);

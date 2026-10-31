@@ -18,7 +18,7 @@ import {
   AuthSession,
   UserAccount,
 } from './types';
-import { StorageService, getArabicDayName, getEffectiveMarketDate, generateCleanRows } from './services/storage';
+import { StorageService, getArabicDayName, getEffectiveMarketDate, generateCleanRows, STORAGE_KEYS } from './services/storage';
 import { AuthService } from './services/auth';
 import { SupabaseBackupService } from './services/supabaseBackup';
 import { Header } from './components/Header';
@@ -191,6 +191,30 @@ export default function App() {
   useEffect(() => {
     StorageService.saveSettings(settings);
   }, [settings]);
+
+  // Cloud sync: load shared data from Supabase and keep all devices up to date
+  useEffect(() => {
+    let stopped = false;
+    const run = async () => {
+      const changed = await StorageService.syncFromCloud();
+      if (stopped || changed.length === 0) return;
+      if (changed.includes(STORAGE_KEYS.GROCERIES)) setGroceries(StorageService.getGroceries());
+      if (changed.includes(STORAGE_KEYS.SUPPLIERS)) setSuppliers(StorageService.getSuppliers());
+      if (changed.includes(STORAGE_KEYS.ITEMS)) setItems(StorageService.getItems());
+      if (changed.includes(STORAGE_KEYS.DAILY_SHEETS)) setDailySheets(StorageService.getDailySheets());
+      if (changed.includes(STORAGE_KEYS.VOUCHERS)) setVouchers(StorageService.getVouchers());
+      if (changed.includes(STORAGE_KEYS.AUDIT_LOGS)) setAuditLogs(StorageService.getAuditLogs());
+      if (changed.includes(STORAGE_KEYS.SETTINGS)) setSettings(StorageService.getSettings());
+    };
+    run();
+    const id = setInterval(run, 5000);
+    window.addEventListener('focus', run);
+    return () => {
+      stopped = true;
+      clearInterval(id);
+      window.removeEventListener('focus', run);
+    };
+  }, []);
 
   // Audit Log Adder Helper
   const logAudit = (
