@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { AuthService } from '../services/auth';
 import { AuthSession } from '../types';
 import { Smartphone, Lock, LogIn, AlertCircle } from 'lucide-react';
@@ -23,7 +23,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
 
@@ -36,6 +36,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
       return;
     }
 
+    await AuthService.pullUsersFromCloud();
     const res = AuthService.login(phone, pin, rememberDevice);
     if (res.success && res.session) {
       onLoginSuccess(res.session);

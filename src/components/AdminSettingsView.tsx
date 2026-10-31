@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import {
   SystemSettings,
   Grocery,
@@ -71,6 +71,9 @@ export const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
 
   // User Accounts State
   const [usersList, setUsersList] = useState<UserAccount[]>(() => AuthService.getUsers());
+  useEffect(() => {
+    AuthService.pullUsersFromCloud().then(setUsersList);
+  }, []);
   const [showAddUserModal, setShowAddUserModal] = useState(false);
   const [newUserName, setNewUserName] = useState('');
   const [newUserPhone, setNewUserPhone] = useState('');

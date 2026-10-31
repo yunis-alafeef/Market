@@ -1,4 +1,5 @@
-import { UserAccount, AuthSession } from '../types';
+﻿import { UserAccount, AuthSession } from '../types';
+import { supabase } from './supabase';
 
 const SESSION_KEY = 'veg_app_auth_session_v2';
 const USERS_STORAGE_KEY = 'veg_app_users_v2';
@@ -103,6 +104,41 @@ export const AuthService = {
     } catch (e) {
       console.error('Failed to save users:', e);
     }
+    void this.pushUsersToCloud(users);
+  },
+
+  /** Upsert all users to Supabase (table app_users) */
+  async pushUsersToCloud(users: UserAccount[]): Promise<void> {
+    try {
+      const { error } = await supabase
+        .from('app_users')
+        .upsert(users.map((u) => ({ id: u.id, data: u, updated_at: new Date().toISOString() })));
+      if (error) console.warn('Supabase app_users sync error:', error.message);
+    } catch (e) {
+      console.warn('Supabase app_users sync failed:', e);
+    }
+  },
+
+  /** Load users from Supabase into local storage (cloud is the source of truth). */
+  async pullUsersFromCloud(): Promise<UserAccount[]> {
+    try {
+      const { data, error } = await supabase.from('app_users').select('id,data');
+      if (error) {
+        console.warn('Supabase app_users load error:', error.message);
+        return this.getUsers();
+      }
+      if (data && data.length > 0) {
+        const cloudUsers = data.map((r: any) => r.data as UserAccount);
+        localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(cloudUsers));
+        return this.getUsers();
+      }
+      const local = this.getUsers();
+      await this.pushUsersToCloud(local);
+      return local;
+    } catch (e) {
+      console.warn('Supabase app_users load failed:', e);
+      return this.getUsers();
+    }
   },
 
   addUser(user: Omit<UserAccount, 'id' | 'createdAt'>): UserAccount {
@@ -129,6 +165,9 @@ export const AuthService = {
     const users = this.getUsers();
     const updated = users.filter((u) => u.id !== userId);
     this.saveUsers(updated);
+    void supabase.from('app_users').delete().eq('id', userId).then(({ error }) => {
+      if (error) console.warn('Supabase app_users delete error:', error.message);
+    });
   },
 
   getCurrentSession(): AuthSession | null {
