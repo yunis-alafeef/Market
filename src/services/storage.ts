@@ -21,24 +21,10 @@ export const INITIAL_GROCERIES: Grocery[] = [
 
 // Suppliers in Yemen wholesale vegetable market
 export const INITIAL_SUPPLIERS: Supplier[] = [
-  { id: 's1', name: 'مزارع الوادي الأخضر (طماط وخيار)', phone: '771122334', specialty: 'طماط، خيار، بيبار محمي', balance: 0, active: true },
-  { id: 's2', name: 'سوق الجملة المركزي (أبو رشيد)', phone: '772233445', specialty: 'بصل، بطاط، ثوم بلدي', balance: 0, active: true },
-  { id: 's3', name: 'مزارع السهل الذهبي', phone: '773344556', specialty: 'كوسه، باميه، باذنجان أسود', balance: 0, active: true },
-  { id: 's4', name: 'مؤسسة البركة لاستيراد وتوريد الفواكه', phone: '774455667', specialty: 'ليمون، حمضيات، جزر', balance: 0, active: true },
 ];
 
 // The 10 Core Vegetable items
 export const INITIAL_ITEMS: VegetableItem[] = [
-  { id: 'item_1', name: 'طماط', unit: 'سلة', defaultCostPrice: 3500, defaultSalePrice: 4200 },
-  { id: 'item_2', name: 'بطاط', unit: 'شوال', defaultCostPrice: 6000, defaultSalePrice: 7200 },
-  { id: 'item_3', name: 'بصل', unit: 'شوال', defaultCostPrice: 4500, defaultSalePrice: 5500 },
-  { id: 'item_4', name: 'جزر', unit: 'كرتون', defaultCostPrice: 3000, defaultSalePrice: 3800 },
-  { id: 'item_5', name: 'بيبار', unit: 'كرتون', defaultCostPrice: 5000, defaultSalePrice: 6200 },
-  { id: 'item_6', name: 'باميه', unit: 'سلة', defaultCostPrice: 7000, defaultSalePrice: 8500 },
-  { id: 'item_7', name: 'كوسه', unit: 'سلة', defaultCostPrice: 4000, defaultSalePrice: 5000 },
-  { id: 'item_8', name: 'اسود', unit: 'سلة', defaultCostPrice: 3500, defaultSalePrice: 4400 },
-  { id: 'item_9', name: 'ليم', unit: 'كرتون', defaultCostPrice: 5500, defaultSalePrice: 6800 },
-  { id: 'item_10', name: 'خيار', unit: 'كرتون', defaultCostPrice: 2800, defaultSalePrice: 3500 },
 ];
 
 // Clean Production System Settings for Younis Al-Afif & Mohannad Al-Ahmadi

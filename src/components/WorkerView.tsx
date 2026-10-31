@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import {
   DailySheet,
   DailyOrderRow,
@@ -67,7 +67,7 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
   // Tabs: 'night_orders' (طلبات الليل والشراء) vs 'morning_sort' (فرز وتوزيع الصباح)
   const [activeTab, setActiveTab] = useState<'night_orders' | 'morning_sort'>('night_orders');
   // View mode is fixed to 'table' (الجدول الافتراضي) as required
-  const viewMode = 'table';
+  const viewMode = 'table' as 'table' | 'cards';
   // Selected grocery for the mobile cards stepper (kept for compatibility)
   const [activeCardGroceryId, setActiveCardGroceryId] = useState<string>(groceries[0]?.id || '');
   // Selected grocery filter for morning sort view

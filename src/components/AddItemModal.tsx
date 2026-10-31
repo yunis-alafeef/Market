@@ -11,8 +11,8 @@ interface AddItemModalProps {
 export const AddItemModal: React.FC<AddItemModalProps> = ({ isOpen, onClose, onAddItem }) => {
   const [name, setName] = useState('');
   const [unit, setUnit] = useState('سلة');
-  const [defaultCostPrice, setDefaultCostPrice] = useState<number>(3500);
-  const [defaultSalePrice, setDefaultSalePrice] = useState<number>(4200);
+  const [defaultCostPrice, setDefaultCostPrice] = useState<number>(0);
+  const [defaultSalePrice, setDefaultSalePrice] = useState<number>(0);
 
   if (!isOpen) return null;
 
@@ -26,6 +26,8 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({ isOpen, onClose, onA
       defaultSalePrice: Number(defaultSalePrice) || 0,
     });
     setName('');
+    setDefaultCostPrice(0);
+    setDefaultSalePrice(0);
     onClose();
   };
 
@@ -48,24 +50,23 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({ isOpen, onClose, onA
             <input
               type="text"
               required
-              placeholder="مثال: فاصوليا، خس، كراث، فلفل حار..."
               value={name}
               onChange={(e) => setName(e.target.value)}
+              placeholder="مثال: طماط، بطاطس، بصل..."
               className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#1e3799] focus:outline-none"
-              autoFocus
             />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-600 mb-1">وحدة القياس / العبوة</label>
+            <label className="block text-xs font-semibold text-slate-600 mb-1">الوحدة الافتراضية</label>
             <select
               value={unit}
               onChange={(e) => setUnit(e.target.value)}
               className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#1e3799] focus:outline-none"
             >
               <option value="سلة">سلة</option>
-              <option value="كرتون">كرتون</option>
               <option value="شوال">شوال</option>
+              <option value="كرتون">كرتون</option>
               <option value="كيس">كيس</option>
               <option value="صندوق">صندوق</option>
               <option value="كيلو">كيلو</option>
@@ -79,15 +80,18 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({ isOpen, onClose, onA
               type="number"
               min="0"
               step="any"
-              value={defaultCostPrice || ''}
+              value={defaultCostPrice === 0 ? '' : defaultCostPrice}
               onChange={(e) => {
                 const val = parseFloat(e.target.value) || 0;
                 setDefaultCostPrice(val);
                 setDefaultSalePrice(val);
               }}
-              placeholder="0"
+              placeholder="0 (يحدده العامل أثناء الشراء)"
               className="w-full px-3 py-2 text-sm font-mono bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#1e3799] focus:outline-none tabular-nums"
             />
+            <span className="text-[10px] text-slate-500 mt-1 block">
+              * الافتراضي 0، ويقوم العامل بتحديد سعر الشراء الفعلي قبل ترحيل الكشف.
+            </span>
           </div>
 
           <div className="flex justify-end gap-2 pt-3 border-t border-slate-200">

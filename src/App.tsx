@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @license
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -18,7 +18,7 @@ import {
   AuthSession,
   UserAccount,
 } from './types';
-import { StorageService, getArabicDayName, getEffectiveMarketDate } from './services/storage';
+import { StorageService, getArabicDayName, getEffectiveMarketDate, generateCleanRows } from './services/storage';
 import { AuthService } from './services/auth';
 import { SupabaseBackupService } from './services/supabaseBackup';
 import { Header } from './components/Header';

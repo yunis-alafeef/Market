@@ -169,28 +169,10 @@ ON CONFLICT (setting_key) DO UPDATE
 SET setting_value = EXCLUDED.setting_value;
 
 -- 4.3. قائمة أصناف الخضروات والوحدات والأسعار التقديرية
-INSERT INTO vegetable_items (id, name, unit, default_cost_price, default_sale_price, display_order, is_active) VALUES
-('item_1',  'طماط',  'سلة',    3500.00, 4200.00, 1, TRUE),
-('item_2',  'بطاط',  'شوال',   6000.00, 7200.00, 2, TRUE),
-('item_3',  'بصل',   'شوال',   4500.00, 5500.00, 3, TRUE),
-('item_4',  'جزر',   'كرتون',  3000.00, 3800.00, 4, TRUE),
-('item_5',  'بيبار',  'كرتون',  5000.00, 6200.00, 5, TRUE),
-('item_6',  'باميه',  'سلة',    7000.00, 8500.00, 6, TRUE),
-('item_7',  'كوسه',  'سلة',    4000.00, 5000.00, 7, TRUE),
-('item_8',  'اسود',  'سلة',    3500.00, 4400.00, 8, TRUE),
-('item_9',  'ليم',   'كرتون',  5500.00, 6800.00, 9, TRUE),
-('item_10', 'خيار',  'كرتون',  2800.00, 3500.00, 10, TRUE)
-ON CONFLICT (id) DO UPDATE 
-SET name = EXCLUDED.name, unit = EXCLUDED.unit, default_cost_price = EXCLUDED.default_cost_price, default_sale_price = EXCLUDED.default_sale_price;
+-- (no default items)
 
 -- 4.4. قائمة الموردين المعتمدين (رصيد أولي 0.00)
-INSERT INTO suppliers (id, name, phone, specialty, address, balance, is_active) VALUES
-('s1', 'مزارع الوادي الأخضر (طماط وخيار)', '771122334', 'طماط، خيار، بيبار محمي', 'مأرب / الجوف', 0.00, TRUE),
-('s2', 'سوق الجملة المركزي (أبو رشيد)', '772233445', 'بصل، بطاط، ثوم بلدي', 'السوق المركزي للخضار', 0.00, TRUE),
-('s3', 'مزارع السهل الذهبي', '773344556', 'كوسه، باميه، باذنجان أسود', 'الحديدة / تهامة', 0.00, TRUE),
-('s4', 'مؤسسة البركة لاستيراد وتوريد الفواكه', '774455667', 'ليمون، حمضيات، جزر', 'صنعاء - شارع الستين', 0.00, TRUE)
-ON CONFLICT (id) DO UPDATE 
-SET name = EXCLUDED.name, phone = EXCLUDED.phone, specialty = EXCLUDED.specialty, balance = 0.00;
+-- (no default suppliers)
 
 -- 4.5. قائمة البقالات المعتمدة (رصيد أولي 0.00)
 INSERT INTO groceries (id, name, short_code, owner_name, phone, address, balance, is_active) VALUES
