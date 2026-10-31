@@ -170,10 +170,8 @@ export const InvoicePrintModal: React.FC<InvoicePrintModalProps> = ({
                         <th className="p-2 border border-slate-300 text-center w-16">الوحدة</th>
                         <th className="p-2 border border-slate-300">المورد المعتمد</th>
                         <th className="p-2 border border-slate-300 text-center w-20">إجمالي الكمية</th>
-                        <th className="p-2 border border-slate-300 text-center w-22">سعر الشراء</th>
-                        <th className="p-2 border border-slate-300 text-center w-24">إجمالي الشراء</th>
-                        <th className="p-2 border border-slate-300 text-center w-22">سعر البيع</th>
-                        <th className="p-2 border border-slate-300 text-center w-24">إجمالي المبيعات</th>
+                        <th className="p-2 border border-slate-300 text-center w-24">سعر الشراء (الوحدة)</th>
+                        <th className="p-2 border border-slate-300 text-center w-28">إجمالي الشراء</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -195,29 +193,19 @@ export const InvoicePrintModal: React.FC<InvoicePrintModalProps> = ({
                             <td className="p-1.5 border border-slate-200 text-center font-mono font-semibold tabular-nums text-slate-900">
                               {Number(row.totalCost).toLocaleString()} ر.س
                             </td>
-                            <td className="p-1.5 border border-slate-200 text-center font-mono tabular-nums">
-                              {Number(row.salePrice).toLocaleString()} ر.س
-                            </td>
-                            <td className="p-1.5 border border-slate-200 text-center font-mono font-black tabular-nums text-[#0c2461]">
-                              {Number(row.totalSale).toLocaleString()} ر.س
-                            </td>
                           </tr>
                         ));
                       })()}
                     </tbody>
                     <tfoot>
                       <tr className="bg-amber-100 font-black border-t-2 border-[#0c2461]">
-                        <td colSpan={4} className="p-2 text-right">الإجماليات الكلية للمشتريات والمبيعات:</td>
+                        <td colSpan={4} className="p-2 text-right">الإجمالي الكلي للمشتريات:</td>
                         <td className="p-2 text-center font-mono tabular-nums text-[#0c2461]">
                           {data.sheet.rows.reduce((s, r) => s + (Number(r.totalQuantity) || 0), 0)}
                         </td>
                         <td className="p-2 text-center">-</td>
                         <td className="p-2 text-center font-mono tabular-nums text-slate-900">
                           {data.sheet.totalCost.toLocaleString()} ر.س
-                        </td>
-                        <td className="p-2 text-center">-</td>
-                        <td className="p-2 text-center font-mono tabular-nums text-[#0c2461]">
-                          {data.sheet.totalSale.toLocaleString()} ر.س
                         </td>
                       </tr>
                     </tfoot>
@@ -279,7 +267,7 @@ export const InvoicePrintModal: React.FC<InvoicePrintModalProps> = ({
                         }
                         return gRows.map((row, idx) => {
                           const q = Number(row.quantities[gId]) || 0;
-                          const sp = Number(row.salePrice) || 0;
+                          const sp = Number(row.costPrice) || 0;
                           const lineTotal = Math.round(q * sp * 100) / 100;
                           return (
                             <tr key={row.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
@@ -313,7 +301,7 @@ export const InvoicePrintModal: React.FC<InvoicePrintModalProps> = ({
                         const invoiceTotal = gRows.reduce(
                           (sum, r) =>
                             sum +
-                            Math.round((Number(r.quantities[gId]) || 0) * (Number(r.salePrice) || 0) * 100) / 100,
+                            Math.round((Number(r.quantities[gId]) || 0) * (Number(r.costPrice) || 0) * 100) / 100,
                           0
                         );
                         const prevBal = Number(data.grocery?.balance) || 0;
@@ -480,9 +468,9 @@ export const InvoicePrintModal: React.FC<InvoicePrintModalProps> = ({
                     </span>
                   </div>
                   <div className="bg-emerald-50 p-3 rounded-2xl border border-emerald-200">
-                    <span className="text-[11px] text-[#009432] block">صافي الربح التقديري</span>
-                    <span className="text-lg font-bold font-mono text-[#009432] tabular-nums">
-                      +{data.sheet.totalProfit.toLocaleString()} ر.س
+                    <span className="text-[11px] text-[#006266] block">تسعير التكلفة</span>
+                    <span className="text-sm font-bold font-mono text-[#006266] tabular-nums">
+                      بسعر الشراء المباشر للبقالات
                     </span>
                   </div>
                 </div>
@@ -497,7 +485,7 @@ export const InvoicePrintModal: React.FC<InvoicePrintModalProps> = ({
                       <th className="py-2 px-2">الوحدة</th>
                       <th className="py-2 px-2">المورد</th>
                       <th className="py-2 px-2 text-center">الكمية</th>
-                      <th className="py-2 px-2 text-center">سعر البيع</th>
+                      <th className="py-2 px-2 text-center">سعر الشراء</th>
                       <th className="py-2 px-2 text-center">إجمالي القيمة</th>
                     </tr>
                   </thead>
@@ -514,10 +502,10 @@ export const InvoicePrintModal: React.FC<InvoicePrintModalProps> = ({
                             {row.totalQuantity}
                           </td>
                           <td className="py-2 px-2 text-center font-mono tabular-nums text-slate-600">
-                            {Number(row.salePrice).toLocaleString()} ر.س
+                            {Number(row.costPrice).toLocaleString()} ر.س
                           </td>
                           <td className="py-2 px-2 text-center font-mono font-bold text-slate-900 tabular-nums">
-                            {Number(row.totalSale).toLocaleString()} ر.س
+                            {Number(row.totalCost).toLocaleString()} ر.س
                           </td>
                         </tr>
                       ));
@@ -525,13 +513,13 @@ export const InvoicePrintModal: React.FC<InvoicePrintModalProps> = ({
                   </tbody>
                   <tfoot>
                     <tr className="border-t-2 border-slate-900 font-black">
-                      <td colSpan={3} className="py-2.5 px-2 text-right">الإجمالي النهائي المستحق:</td>
+                      <td colSpan={3} className="py-2.5 px-2 text-right">الإجمالي النهائي للمشتريات:</td>
                       <td className="py-2.5 px-2 text-center font-mono tabular-nums">
                         {data.sheet.rows.reduce((s, r) => s + (Number(r.totalQuantity) || 0), 0)}
                       </td>
                       <td className="py-2.5 px-2 text-center">-</td>
                       <td className="py-2.5 px-2 text-center font-mono text-base tabular-nums text-slate-900">
-                        {data.sheet.totalSale.toLocaleString()} ر.س
+                        {data.sheet.totalCost.toLocaleString()} ر.س
                       </td>
                     </tr>
                   </tfoot>
@@ -571,7 +559,7 @@ export const InvoicePrintModal: React.FC<InvoicePrintModalProps> = ({
                         );
                         return gRows.map((row, idx) => {
                           const q = Number(row.quantities[gId]) || 0;
-                          const sp = Number(row.salePrice) || 0;
+                          const sp = Number(row.costPrice) || 0;
                           return (
                             <tr key={row.id} className="border-b border-slate-100">
                               <td className="py-2 px-2 font-mono text-slate-400">{idx + 1}</td>

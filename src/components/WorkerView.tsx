@@ -89,7 +89,7 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
       const newQuantities = { ...row.quantities, [groceryId]: nextVal };
       const totalQty = Math.round(Object.values(newQuantities).reduce((sum, q) => sum + (Number(q) || 0), 0) * 100) / 100;
       const totalCost = Math.round(totalQty * (Number(row.costPrice) || 0) * 100) / 100;
-      const totalSale = Math.round(totalQty * (Number(row.salePrice) || 0) * 100) / 100;
+      const totalSale = totalCost;
 
       return {
         ...row,
@@ -97,7 +97,7 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
         totalQuantity: totalQty,
         totalCost,
         totalSale,
-        profit: Math.round((totalSale - totalCost) * 100) / 100,
+        profit: 0,
       };
     });
 
@@ -117,7 +117,7 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
       const newQuantities = { ...row.quantities, [groceryId]: nextVal };
       const totalQty = Math.round(Object.values(newQuantities).reduce((sum, q) => sum + (Number(q) || 0), 0) * 100) / 100;
       const totalCost = Math.round(totalQty * (Number(row.costPrice) || 0) * 100) / 100;
-      const totalSale = Math.round(totalQty * (Number(row.salePrice) || 0) * 100) / 100;
+      const totalSale = totalCost;
 
       return {
         ...row,
@@ -125,7 +125,7 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
         totalQuantity: totalQty,
         totalCost,
         totalSale,
-        profit: Math.round((totalSale - totalCost) * 100) / 100,
+        profit: 0,
       };
     });
 
@@ -139,13 +139,13 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
     const updatedRows = sheet.rows.map((row) => {
       if (row.id !== rowId) return row;
       const totalCost = Math.round(targetVal * (Number(row.costPrice) || 0) * 100) / 100;
-      const totalSale = Math.round(targetVal * (Number(row.salePrice) || 0) * 100) / 100;
+      const totalSale = totalCost;
       return {
         ...row,
         totalQuantity: targetVal,
         totalCost,
         totalSale,
-        profit: Math.round((totalSale - totalCost) * 100) / 100,
+        profit: 0,
       };
     });
     recalculateAndSave(updatedRows);
@@ -169,15 +169,15 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
     recalculateAndSave(updatedRows);
   };
 
-  // Price changes directly from the table or cards
+  // Price changes directly from the table or cards (Only Cost / Purchase Price)
   const handlePriceChange = (rowId: string, field: 'costPrice' | 'salePrice', val: number) => {
     const targetRow = sheet.rows.find((r) => r.id === rowId);
     const updatedRows = sheet.rows.map((row) => {
       if (row.id !== rowId) return row;
-      const costPrice = field === 'costPrice' ? Math.max(0, val) : row.costPrice;
-      const salePrice = field === 'salePrice' ? Math.max(0, val) : row.salePrice;
+      const costPrice = Math.max(0, val);
+      const salePrice = costPrice; // سعر البيع مطابق لسعر الشراء (لا توجد أرباح)
       const totalCost = Math.round((Number(row.totalQuantity) || 0) * costPrice * 100) / 100;
-      const totalSale = Math.round((Number(row.totalQuantity) || 0) * salePrice * 100) / 100;
+      const totalSale = totalCost;
 
       return {
         ...row,
@@ -185,14 +185,13 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
         salePrice,
         totalCost,
         totalSale,
-        profit: Math.round((totalSale - totalCost) * 100) / 100,
+        profit: 0,
       };
     });
 
     if (targetRow && onUpdateItemPrice) {
-      const newCost = field === 'costPrice' ? Math.max(0, val) : targetRow.costPrice;
-      const newSale = field === 'salePrice' ? Math.max(0, val) : targetRow.salePrice;
-      onUpdateItemPrice(targetRow.itemId, newCost, newSale);
+      const newCost = Math.max(0, val);
+      onUpdateItemPrice(targetRow.itemId, newCost, newCost);
     }
 
     recalculateAndSave(updatedRows);
@@ -371,18 +370,18 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
       return;
     }
 
-    // 2. Strict Check: Reject settling if any active item has salePrice <= 0 or costPrice <= 0
+    // 2. Strict Check: Reject settling if any active item has costPrice <= 0
     const zeroPriceItems = activeOrderRows.filter(
-      (r) => (Number(r.salePrice) || 0) <= 0 || (Number(r.costPrice) || 0) <= 0
+      (r) => (Number(r.costPrice) || 0) <= 0
     );
 
     if (zeroPriceItems.length > 0) {
       const detailsList = zeroPriceItems
-        .map((r) => `• ${r.itemName} (${r.unit}): كمية [${r.totalQuantity}] - سعر الشراء: [${r.costPrice || 0} ر.س] | سعر البيع: [${r.salePrice || 0} ر.س]`)
+        .map((r) => `• ${r.itemName} (${r.unit}): كمية [${r.totalQuantity}] - سعر الشراء: [${r.costPrice || 0} ر.س]`)
         .join('\n');
 
       alert(
-        `⛔ لا يمكن ترحيل الحسابات والقيمة لا زالت صفر!\n\nيوجد (${zeroPriceItems.length}) منتجات مطلوبة ولكن سعرها ما زال صفراً:\n\n${detailsList}\n\nيرجى تعبئة الفراغ وتحديد سعر الشراء وسعر البيع لكل صنف أعلاه قبل إتمام الترحيل.`
+        `⛔ لا يمكن ترحيل الحسابات وسعر الشراء لا زال صفراً!\n\nيوجد (${zeroPriceItems.length}) منتجات مطلوبة ولكن سعر شرائها ما زال صفراً:\n\n${detailsList}\n\nيرجى تعبئة الفراغ وتحديد سعر الشراء لكل صنف أعلاه قبل إتمام الترحيل.`
       );
       return;
     }
@@ -437,7 +436,7 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
     sheet.rows.forEach((row) => {
       const q = Number(row.quantities[g.id]) || 0;
       totalQty += q;
-      totalAmount += Math.round(q * (Number(row.salePrice) || 0) * 100) / 100;
+      totalAmount += Math.round(q * (Number(row.costPrice) || 0) * 100) / 100;
     });
     return {
       groceryId: g.id,
@@ -844,11 +843,6 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
                           <span className="whitespace-nowrap">
                             إجمالي كافة البقالات: <strong className="font-mono text-[#006266] text-sm">{row.totalQuantity} {row.unit}</strong>
                           </span>
-                          {settings.permissions.workerCanViewPurchaseCost && (
-                            <span className="whitespace-nowrap font-mono text-slate-700">
-                              سعر الشراء: <strong>{row.costPrice} ر.س</strong>
-                            </span>
-                          )}
                         </div>
 
                         {/* THE STEPPER BOX FOR ACTIVE GROCERY (Huge, thumb-friendly buttons) */}
@@ -857,21 +851,21 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
                             <span className="whitespace-nowrap">
                               كمية ({activeGrocery?.name.replace('بقالة', '')}):
                             </span>
-                            <div className="flex items-center gap-1 bg-white px-2 py-0.5 rounded-lg border border-amber-300">
-                              <span className="font-bold text-[11px] text-slate-600">سعر البيع:</span>
+                            <div className="flex items-center gap-1 bg-white px-2 py-0.5 rounded-lg border border-emerald-300">
+                              <span className="font-bold text-[11px] text-slate-600">سعر الشراء:</span>
                               <input
                                 type="number"
                                 min="0"
-                                step="50"
+                                step="1"
                                 disabled={isLocked}
-                                value={row.salePrice === 0 ? '' : row.salePrice}
+                                value={row.costPrice === 0 ? '' : row.costPrice}
                                 onChange={(e) =>
-                                  handlePriceChange(row.id, 'salePrice', parseFloat(e.target.value) || 0)
+                                  handlePriceChange(row.id, 'costPrice', parseFloat(e.target.value) || 0)
                                 }
-                                className="w-16 text-center font-mono font-black text-xs py-0.5 bg-transparent text-[#0c2461] focus:outline-none"
-                                title="تحديد سعر البيع"
+                                className="w-16 text-center font-mono font-black text-xs py-0.5 bg-transparent text-[#006266] focus:outline-none"
+                                title="تحديد سعر الشراء"
                               />
-                              <span className="text-[10px] text-slate-500">ر.س</span>
+                              <span className="text-[10px] text-slate-500 font-bold">ر.س</span>
                             </div>
                           </div>
 
@@ -1029,14 +1023,9 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
                       <th className="p-3 text-center font-bold bg-[#1e3799]/80 min-w-[70px] whitespace-nowrap">
                         المجموع
                       </th>
-                      {settings.permissions.workerCanViewPurchaseCost && (
-                        <th className="p-3 text-center font-bold min-w-[95px] whitespace-nowrap">
-                          سعر الشراء
-                        </th>
-                      )}
-                      <th className="p-3 text-center font-bold min-w-[125px] whitespace-nowrap bg-[#1e3799]">
+                      <th className="p-3 text-center font-bold min-w-[120px] whitespace-nowrap bg-[#1e3799]">
                         <div className="text-[#f6b93b] font-black">
-                          سعر البيع (تحديد السعر)
+                          سعر الشراء (تحديد السعر)
                         </div>
                       </th>
                       <th className="p-3 text-center font-bold min-w-[110px] whitespace-nowrap">
@@ -1137,49 +1126,24 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
                           />
                         </td>
 
-                        {settings.permissions.workerCanViewPurchaseCost && (
-                          <td className="p-2 text-center whitespace-nowrap">
-                            <div className="flex items-center justify-center gap-1">
-                              <input
-                                type="number"
-                                min="0"
-                                step="50"
-                                disabled={isLocked}
-                                value={row.costPrice === 0 ? '' : row.costPrice}
-                                onChange={(e) =>
-                                  handlePriceChange(
-                                    row.id,
-                                    'costPrice',
-                                    parseFloat(e.target.value) || 0
-                                  )
-                                }
-                                placeholder="0"
-                                className="w-20 text-center font-mono text-xs py-1 px-1 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#006266]/40 text-slate-700 shadow-2xs font-bold"
-                                title="تحديد سعر الشراء مباشرة من الجدول"
-                              />
-                              <span className="text-[10px] text-slate-500 font-bold">ر.س</span>
-                            </div>
-                          </td>
-                        )}
-
                         <td className="p-2 text-center whitespace-nowrap">
                           <div className="flex items-center justify-center gap-1">
                             <input
                               type="number"
                               min="0"
-                              step="50"
+                              step="any"
                               disabled={isLocked}
-                              value={row.salePrice === 0 ? '' : row.salePrice}
+                              value={row.costPrice === 0 ? '' : row.costPrice}
                               onChange={(e) =>
                                 handlePriceChange(
                                   row.id,
-                                  'salePrice',
+                                  'costPrice',
                                   parseFloat(e.target.value) || 0
                                 )
                               }
                               placeholder="0"
-                              className="w-22 text-center font-mono text-xs py-1 px-1.5 bg-amber-50 hover:bg-amber-100/50 border border-amber-400 focus:border-[#006266] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#006266]/40 text-[#0c2461] font-black shadow-2xs"
-                              title="تحديد سعر بيع الصنف للبقالات مباشرة من الجدول"
+                              className="w-22 text-center font-mono text-xs py-1 px-1.5 bg-emerald-50 hover:bg-emerald-100/50 border border-emerald-400 focus:border-[#006266] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#006266]/40 text-[#006266] font-black shadow-2xs"
+                              title="تحديد سعر الشراء للوحدة مباشرة من الجدول"
                             />
                             <span className="text-[10px] text-slate-600 font-bold">ر.س</span>
                           </div>
@@ -1255,20 +1219,12 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
                       </td>
 
                       {/* Total Purchase Cost */}
-                      {settings.permissions.workerCanViewPurchaseCost && (
-                        <td className="p-2 text-center font-mono font-black text-xs text-slate-800 tabular-nums whitespace-nowrap bg-slate-200/50">
-                          <div>{sheet.totalCost.toLocaleString()}</div>
-                          <div className="text-[9px] font-normal text-slate-600">ر.س شراء</div>
-                        </td>
-                      )}
-
-                      {/* Total Sale Value */}
-                      <td className="p-2 text-center font-mono font-black text-xs text-[#0c2461] tabular-nums whitespace-nowrap bg-amber-100/80 border-x border-amber-300">
-                        <div className="text-sm font-black text-[#0c2461]">
-                          {sheet.totalSale.toLocaleString()} <span className="text-[10px]">ر.س</span>
+                      <td className="p-2 text-center font-mono font-black text-xs text-[#006266] tabular-nums whitespace-nowrap bg-emerald-100/80 border-x border-emerald-300">
+                        <div className="text-sm font-black text-[#006266]">
+                          {sheet.totalCost.toLocaleString()} <span className="text-[10px]">ر.س</span>
                         </div>
-                        <div className="text-[9px] font-bold text-[#009432]">
-                          ربح: +{(sheet.totalSale - sheet.totalCost).toLocaleString()} ر.س
+                        <div className="text-[9px] font-bold text-slate-600">
+                          إجمالي المشتريات
                         </div>
                       </td>
 
@@ -1285,7 +1241,7 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
                     {/* Row 2: Actions and Quick Add Product buttons */}
                     <tr className="bg-slate-50 border-t border-slate-200">
                       <td
-                        colSpan={groceries.length + (settings.permissions.workerCanViewPurchaseCost ? 6 : 5)}
+                        colSpan={groceries.length + 5}
                         className="p-3 text-right"
                       >
                         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1373,7 +1329,7 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
                   0
                 ) * 100) / 100;
                 const groceryTotalAmount = Math.round(groceryItems.reduce(
-                  (sum, r) => sum + Math.round((Number(r.quantities[grocery.id]) || 0) * (Number(r.salePrice) || 0) * 100) / 100,
+                  (sum, r) => sum + Math.round((Number(r.quantities[grocery.id]) || 0) * (Number(r.costPrice) || 0) * 100) / 100,
                   0
                 ) * 100) / 100;
 
@@ -1442,10 +1398,10 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
                                       {q}
                                     </td>
                                     <td className="py-2 text-center font-mono text-slate-600 tabular-nums">
-                                      {r.salePrice}
+                                      {r.costPrice}
                                     </td>
                                     <td className="py-2 text-center font-mono font-bold text-[#0c2461] tabular-nums">
-                                      {(Math.round(q * (Number(r.salePrice) || 0) * 100) / 100).toLocaleString()}
+                                      {(Math.round(q * (Number(r.costPrice) || 0) * 100) / 100).toLocaleString()}
                                     </td>
                                     <td className="py-2 text-center">
                                       <button

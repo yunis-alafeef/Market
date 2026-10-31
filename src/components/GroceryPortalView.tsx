@@ -68,7 +68,7 @@ export const GroceryPortalView: React.FC<GroceryPortalViewProps> = ({
     0
   );
   const todayTotalCost = todayItems.reduce(
-    (sum, r) => sum + (r.quantities[selectedGrocery.id] || 0) * r.salePrice,
+    (sum, r) => sum + (r.quantities[selectedGrocery.id] || 0) * r.costPrice,
     0
   );
 
@@ -98,7 +98,7 @@ export const GroceryPortalView: React.FC<GroceryPortalViewProps> = ({
       const items = sheet.rows.filter((r) => (Number(r.quantities[selectedGrocery.id]) || 0) > 0);
       const sumAmount = Math.round(
         items.reduce(
-          (sum, r) => sum + Math.round((Number(r.quantities[selectedGrocery.id]) || 0) * (Number(r.salePrice) || 0) * 100) / 100,
+          (sum, r) => sum + Math.round((Number(r.quantities[selectedGrocery.id]) || 0) * (Number(r.costPrice) || 0) * 100) / 100,
           0
         ) * 100
       ) / 100;
@@ -337,7 +337,7 @@ export const GroceryPortalView: React.FC<GroceryPortalViewProps> = ({
                   <tbody>
                     {todayItems.map((r, idx) => {
                       const q = r.quantities[selectedGrocery.id] || 0;
-                      const lineTotal = q * r.salePrice;
+                      const lineTotal = q * r.costPrice;
 
                       return (
                         <tr
@@ -353,7 +353,7 @@ export const GroceryPortalView: React.FC<GroceryPortalViewProps> = ({
                             {q}
                           </td>
                           <td className="p-2.5 text-center font-mono tabular-nums text-slate-700">
-                            {r.salePrice.toLocaleString()} ر.س
+                            {r.costPrice.toLocaleString()} ر.س
                           </td>
                           <td className="p-2.5 text-center font-mono font-bold tabular-nums text-[#0c2461]">
                             {lineTotal.toLocaleString()} ر.س

@@ -73,29 +73,21 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({ isOpen, onClose, onA
             </select>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">سعر الشراء الافتراضي</label>
-              <input
-                type="number"
-                min="0"
-                step="any"
-                value={defaultCostPrice || ''}
-                onChange={(e) => setDefaultCostPrice(parseFloat(e.target.value) || 0)}
-                className="w-full px-3 py-2 text-sm font-mono bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#1e3799] focus:outline-none tabular-nums"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">سعر البيع للبقالة</label>
-              <input
-                type="number"
-                min="0"
-                step="any"
-                value={defaultSalePrice || ''}
-                onChange={(e) => setDefaultSalePrice(parseFloat(e.target.value) || 0)}
-                className="w-full px-3 py-2 text-sm font-mono bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#1e3799] focus:outline-none tabular-nums"
-              />
-            </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-600 mb-1">سعر الشراء الافتراضي (سعر التكلفة)</label>
+            <input
+              type="number"
+              min="0"
+              step="any"
+              value={defaultCostPrice || ''}
+              onChange={(e) => {
+                const val = parseFloat(e.target.value) || 0;
+                setDefaultCostPrice(val);
+                setDefaultSalePrice(val);
+              }}
+              placeholder="0"
+              className="w-full px-3 py-2 text-sm font-mono bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#1e3799] focus:outline-none tabular-nums"
+            />
           </div>
 
           <div className="flex justify-end gap-2 pt-3 border-t border-slate-200">

@@ -267,7 +267,7 @@ export default function App() {
           groceries.forEach((g) => {
             const q = Number(r.quantities[g.id]) || 0;
             if (q > 0) {
-              const lineAmount = Math.round(q * (Number(r.salePrice) || 0) * 100) / 100;
+              const lineAmount = Math.round(q * (Number(r.costPrice) || 0) * 100) / 100;
               groceryPurchases[g.id] = (groceryPurchases[g.id] || 0) + lineAmount;
             }
           });
@@ -486,7 +486,7 @@ export default function App() {
       supplierId: suppliers[0]?.id || '',
       supplierName: suppliers[0]?.name || 'مورد عام',
       costPrice: newItem.defaultCostPrice,
-      salePrice: newItem.defaultSalePrice,
+      salePrice: newItem.defaultCostPrice,
       quantities: groceries.reduce((acc, g) => {
         acc[g.id] = 0;
         return acc;
@@ -633,7 +633,7 @@ export default function App() {
               setItems((prev) =>
                 prev.map((it) =>
                   it.id === itemId
-                    ? { ...it, defaultCostPrice: costPrice, defaultSalePrice: salePrice }
+                    ? { ...it, defaultCostPrice: costPrice, defaultSalePrice: costPrice }
                     : it
                 )
               );

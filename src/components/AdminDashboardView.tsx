@@ -99,7 +99,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       const items = sheet.rows.filter((r) => (Number(r.quantities[groceryId]) || 0) > 0);
       const totalAmount = Math.round(
         items.reduce(
-          (sum, r) => sum + Math.round((Number(r.quantities[groceryId]) || 0) * (Number(r.salePrice) || 0) * 100) / 100,
+          (sum, r) => sum + Math.round((Number(r.quantities[groceryId]) || 0) * (Number(r.costPrice) || 0) * 100) / 100,
           0
         ) * 100
       ) / 100;
@@ -284,8 +284,8 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
             <span className="text-xs font-normal text-slate-500">ر.س</span>
           </div>
           <div className="text-[11px] text-slate-500 mt-2 flex items-center justify-between">
-            <span>مبيعات اليوم: {todaySales.toLocaleString()} ر.س</span>
-            <span className="text-[#009432] font-semibold">ربح: +{(todaySales - todayPurchases).toLocaleString()}</span>
+            <span>إجمالي تكلفة المشتريات للبقالات</span>
+            <span className="text-[#006266] font-semibold">بسعر الشراء المباشر</span>
           </div>
         </div>
 
