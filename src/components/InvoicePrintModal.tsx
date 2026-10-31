@@ -188,10 +188,10 @@ export const InvoicePrintModal: React.FC<InvoicePrintModalProps> = ({
                               {row.totalQuantity}
                             </td>
                             <td className="p-1.5 border border-slate-200 text-center font-mono tabular-nums">
-                              {Number(row.costPrice).toLocaleString()} ر.س
+                              {Number(row.costPrice).toLocaleString()} ر.ي
                             </td>
                             <td className="p-1.5 border border-slate-200 text-center font-mono font-semibold tabular-nums text-slate-900">
-                              {Number(row.totalCost).toLocaleString()} ر.س
+                              {Number(row.totalCost).toLocaleString()} ر.ي
                             </td>
                           </tr>
                         ));
@@ -205,7 +205,7 @@ export const InvoicePrintModal: React.FC<InvoicePrintModalProps> = ({
                         </td>
                         <td className="p-2 text-center">-</td>
                         <td className="p-2 text-center font-mono tabular-nums text-slate-900">
-                          {data.sheet.totalCost.toLocaleString()} ر.س
+                          {data.sheet.totalCost.toLocaleString()} ر.ي
                         </td>
                       </tr>
                     </tfoot>
@@ -278,10 +278,10 @@ export const InvoicePrintModal: React.FC<InvoicePrintModalProps> = ({
                                 {q}
                               </td>
                               <td className="p-1.5 border border-slate-200 text-center font-mono tabular-nums text-slate-700">
-                                {sp.toLocaleString()} ر.س
+                                {sp.toLocaleString()} ر.ي
                               </td>
                               <td className="p-1.5 border border-slate-200 text-center font-mono font-black text-[#0c2461] tabular-nums">
-                                {lineTotal.toLocaleString()} ر.س
+                                {lineTotal.toLocaleString()} ر.ي
                               </td>
                             </tr>
                           );
@@ -318,7 +318,7 @@ export const InvoicePrintModal: React.FC<InvoicePrintModalProps> = ({
                               </td>
                               <td className="p-2 text-center">-</td>
                               <td className="p-2 text-center font-mono text-base text-[#0c2461] tabular-nums">
-                                {invoiceTotal.toLocaleString()} ر.س
+                                {invoiceTotal.toLocaleString()} ر.ي
                               </td>
                             </tr>
                             <tr className="bg-slate-100 font-bold border-t border-slate-300 text-xs">
@@ -326,7 +326,7 @@ export const InvoicePrintModal: React.FC<InvoicePrintModalProps> = ({
                                 الرصيد السابق المستحق على العميل:
                               </td>
                               <td className="p-1.5 text-center font-mono tabular-nums text-slate-900">
-                                {prevBal.toLocaleString()} ر.س
+                                {prevBal.toLocaleString()} ر.ي
                               </td>
                             </tr>
                             <tr className="bg-emerald-50 font-black border-t-2 border-[#0c2461] text-xs sm:text-sm">
@@ -334,7 +334,7 @@ export const InvoicePrintModal: React.FC<InvoicePrintModalProps> = ({
                                 الإجمالي الكلي المطلوب سداده:
                               </td>
                               <td className="p-2 text-center font-mono text-base text-[#009432] tabular-nums font-black">
-                                {netTotalDue.toLocaleString()} ر.س
+                                {netTotalDue.toLocaleString()} ر.ي
                               </td>
                             </tr>
                           </>
@@ -358,7 +358,7 @@ export const InvoicePrintModal: React.FC<InvoicePrintModalProps> = ({
                     <div>
                       <span className="text-slate-500 font-medium">الرصيد المتبقي:</span>{' '}
                       <span className="font-black font-mono text-base text-[#0c2461] bg-[#f6b93b]/30 px-3 py-1 rounded-lg">
-                        {Math.abs(data.grocery?.balance || data.supplier?.balance || 0).toLocaleString()} ر.س
+                        {Math.abs(data.grocery?.balance || data.supplier?.balance || 0).toLocaleString()} ر.ي
                       </span>
                     </div>
                   </div>
@@ -379,13 +379,13 @@ export const InvoicePrintModal: React.FC<InvoicePrintModalProps> = ({
                           <td className="p-2.5 border border-slate-200 font-mono">{row.date}</td>
                           <td className="p-2.5 border border-slate-200 font-medium text-slate-900">{row.description}</td>
                           <td className="p-2.5 border border-slate-200 text-center font-mono tabular-nums">
-                            {row.debit > 0 ? `${row.debit.toLocaleString()} ر.س` : '-'}
+                            {row.debit > 0 ? `${row.debit.toLocaleString()} ر.ي` : '-'}
                           </td>
                           <td className="p-2.5 border border-slate-200 text-center font-mono tabular-nums text-[#009432] font-bold">
-                            {row.credit > 0 ? `${row.credit.toLocaleString()} ر.س` : '-'}
+                            {row.credit > 0 ? `${row.credit.toLocaleString()} ر.ي` : '-'}
                           </td>
                           <td className="p-2.5 border border-slate-200 text-center font-mono font-black tabular-nums text-[#0c2461]">
-                            {row.balance.toLocaleString()} ر.س
+                            {row.balance.toLocaleString()} ر.ي
                           </td>
                         </tr>
                       ))}
@@ -458,13 +458,13 @@ export const InvoicePrintModal: React.FC<InvoicePrintModalProps> = ({
                   <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200">
                     <span className="text-[11px] text-slate-500 block">إجمالي المشتريات</span>
                     <span className="text-lg font-bold font-mono text-slate-900 tabular-nums">
-                      {data.sheet.totalCost.toLocaleString()} ر.س
+                      {data.sheet.totalCost.toLocaleString()} ر.ي
                     </span>
                   </div>
                   <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200">
                     <span className="text-[11px] text-slate-500 block">إجمالي التوزيع للبقالات</span>
                     <span className="text-lg font-bold font-mono text-[#0c2461] tabular-nums">
-                      {data.sheet.totalSale.toLocaleString()} ر.س
+                      {data.sheet.totalSale.toLocaleString()} ر.ي
                     </span>
                   </div>
                   <div className="bg-emerald-50 p-3 rounded-2xl border border-emerald-200">
@@ -502,10 +502,10 @@ export const InvoicePrintModal: React.FC<InvoicePrintModalProps> = ({
                             {row.totalQuantity}
                           </td>
                           <td className="py-2 px-2 text-center font-mono tabular-nums text-slate-600">
-                            {Number(row.costPrice).toLocaleString()} ر.س
+                            {Number(row.costPrice).toLocaleString()} ر.ي
                           </td>
                           <td className="py-2 px-2 text-center font-mono font-bold text-slate-900 tabular-nums">
-                            {Number(row.totalCost).toLocaleString()} ر.س
+                            {Number(row.totalCost).toLocaleString()} ر.ي
                           </td>
                         </tr>
                       ));
@@ -519,7 +519,7 @@ export const InvoicePrintModal: React.FC<InvoicePrintModalProps> = ({
                       </td>
                       <td className="py-2.5 px-2 text-center">-</td>
                       <td className="py-2.5 px-2 text-center font-mono text-base tabular-nums text-slate-900">
-                        {data.sheet.totalCost.toLocaleString()} ر.س
+                        {data.sheet.totalCost.toLocaleString()} ر.ي
                       </td>
                     </tr>
                   </tfoot>
@@ -566,9 +566,9 @@ export const InvoicePrintModal: React.FC<InvoicePrintModalProps> = ({
                               <td className="py-2 px-2 font-bold text-slate-900">{row.itemName}</td>
                               <td className="py-2 px-2 text-center text-slate-500">{row.unit}</td>
                               <td className="py-2 px-2 text-center font-mono font-bold text-slate-900">{q}</td>
-                              <td className="py-2 px-2 text-center font-mono">{sp.toLocaleString()} ر.س</td>
+                              <td className="py-2 px-2 text-center font-mono">{sp.toLocaleString()} ر.ي</td>
                               <td className="py-2 px-2 text-center font-mono font-bold text-slate-900">
-                                {(q * sp).toLocaleString()} ر.س
+                                {(q * sp).toLocaleString()} ر.ي
                               </td>
                             </tr>
                           );
@@ -596,9 +596,9 @@ export const InvoicePrintModal: React.FC<InvoicePrintModalProps> = ({
                       <tr key={idx} className="border-b border-slate-100">
                         <td className="py-2 px-2 font-mono text-slate-500">{row.date}</td>
                         <td className="py-2 px-2 font-medium text-slate-800">{row.description}</td>
-                        <td className="py-2 px-2 text-center font-mono tabular-nums">{row.debit > 0 ? `${row.debit.toLocaleString()} ر.س` : '-'}</td>
-                        <td className="py-2 px-2 text-center font-mono tabular-nums text-emerald-600 font-bold">{row.credit > 0 ? `${row.credit.toLocaleString()} ر.س` : '-'}</td>
-                        <td className="py-2 px-2 text-center font-mono font-bold tabular-nums">{row.balance.toLocaleString()} ر.س</td>
+                        <td className="py-2 px-2 text-center font-mono tabular-nums">{row.debit > 0 ? `${row.debit.toLocaleString()} ر.ي` : '-'}</td>
+                        <td className="py-2 px-2 text-center font-mono tabular-nums text-emerald-600 font-bold">{row.credit > 0 ? `${row.credit.toLocaleString()} ر.ي` : '-'}</td>
+                        <td className="py-2 px-2 text-center font-mono font-bold tabular-nums">{row.balance.toLocaleString()} ر.ي</td>
                       </tr>
                     ))}
                   </tbody>

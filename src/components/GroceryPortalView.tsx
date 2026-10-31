@@ -219,10 +219,10 @@ export const GroceryPortalView: React.FC<GroceryPortalViewProps> = ({
           <span className="text-xs text-slate-500 block mb-1">الرصيد الحالي المستحق عليك</span>
           <div className="text-2xl font-black font-mono text-[#0c2461] tabular-nums">
             {selectedGrocery.balance.toLocaleString()}{' '}
-            <span className="text-xs font-normal text-slate-600">ر.س</span>
+            <span className="text-xs font-normal text-slate-600">ر.ي</span>
           </div>
           <div className="text-[11px] text-slate-400 mt-2">
-            الحد الائتماني المعتمد: {selectedGrocery.creditLimit.toLocaleString()} ر.س
+            الحد الائتماني المعتمد: {selectedGrocery.creditLimit.toLocaleString()} ر.ي
           </div>
         </div>
 
@@ -231,7 +231,7 @@ export const GroceryPortalView: React.FC<GroceryPortalViewProps> = ({
           <span className="text-xs text-slate-500 block mb-1">فاتورة تسليم اليوم الصباحية</span>
           <div className="text-2xl font-black font-mono text-[#006266] tabular-nums">
             {todayTotalCost.toLocaleString()}{' '}
-            <span className="text-xs font-normal text-slate-600">ر.س</span>
+            <span className="text-xs font-normal text-slate-600">ر.ي</span>
           </div>
           <div className="text-[11px] text-slate-400 mt-2">
             إجمالي {todayTotalQty} وحدة مقسمة على {todayItems.length} أصناف
@@ -351,10 +351,10 @@ export const GroceryPortalView: React.FC<GroceryPortalViewProps> = ({
                             {q}
                           </td>
                           <td className="p-2.5 text-center font-mono tabular-nums text-slate-700">
-                            {r.costPrice.toLocaleString()} ر.س
+                            {r.costPrice.toLocaleString()} ر.ي
                           </td>
                           <td className="p-2.5 text-center font-mono font-bold tabular-nums text-[#0c2461]">
-                            {lineTotal.toLocaleString()} ر.س
+                            {lineTotal.toLocaleString()} ر.ي
                           </td>
                         </tr>
                       );
@@ -370,7 +370,7 @@ export const GroceryPortalView: React.FC<GroceryPortalViewProps> = ({
                       </td>
                       <td className="p-3 text-center">-</td>
                       <td className="p-3 text-center font-mono text-base text-[#0c2461] bg-[#f6b93b]/20 tabular-nums">
-                        {todayTotalCost.toLocaleString()} ر.س
+                        {todayTotalCost.toLocaleString()} ر.ي
                       </td>
                     </tr>
                   </tfoot>
@@ -457,13 +457,13 @@ export const GroceryPortalView: React.FC<GroceryPortalViewProps> = ({
                       <td className="p-2.5 font-mono text-slate-600">{row.date}</td>
                       <td className="p-2.5 font-medium text-slate-900">{row.description}</td>
                       <td className="p-2.5 text-center font-mono tabular-nums text-slate-800">
-                        {row.debit > 0 ? `${row.debit.toLocaleString()} ر.س` : '-'}
+                        {row.debit > 0 ? `${row.debit.toLocaleString()} ر.ي` : '-'}
                       </td>
                       <td className="p-2.5 text-center font-mono tabular-nums text-[#009432] font-bold">
-                        {row.credit > 0 ? `${row.credit.toLocaleString()} ر.س` : '-'}
+                        {row.credit > 0 ? `${row.credit.toLocaleString()} ر.ي` : '-'}
                       </td>
                       <td className="p-2.5 text-center font-mono font-bold tabular-nums text-[#0c2461] bg-slate-100/70">
-                        {row.balance.toLocaleString()} ر.س
+                        {row.balance.toLocaleString()} ر.ي
                       </td>
                     </tr>
                   ))}

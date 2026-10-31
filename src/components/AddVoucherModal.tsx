@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { getEffectiveMarketDate } from '../services/storage';
 import { X, Receipt, Check } from 'lucide-react';
 import { Grocery, Supplier, Voucher } from '../types';
@@ -155,12 +155,12 @@ export const AddVoucherModal: React.FC<AddVoucherModalProps> = ({
               {type === 'receipt'
                 ? groceries.map((g) => (
                     <option key={g.id} value={g.id}>
-                      ({g.code}) {g.name} - الرصيد الحالي: {g.balance.toLocaleString()} ر.س
+                      ({g.code}) {g.name} - الرصيد الحالي: {g.balance.toLocaleString()} ر.ي
                     </option>
                   ))
                 : suppliers.map((s) => (
                     <option key={s.id} value={s.id}>
-                      {s.name} - المستحق له: {s.balance.toLocaleString()} ر.س
+                      {s.name} - المستحق له: {s.balance.toLocaleString()} ر.ي
                     </option>
                   ))}
             </select>

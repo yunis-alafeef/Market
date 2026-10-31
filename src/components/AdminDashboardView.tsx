@@ -279,7 +279,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
           </div>
           <div className="text-2xl font-black font-mono text-[#0c2461] tabular-nums">
             {todayPurchases.toLocaleString()}{' '}
-            <span className="text-xs font-normal text-slate-500">ر.س</span>
+            <span className="text-xs font-normal text-slate-500">ر.ي</span>
           </div>
           <div className="text-[11px] text-slate-500 mt-2 flex items-center justify-between">
             <span>إجمالي تكلفة المشتريات للبقالات</span>
@@ -297,7 +297,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
           </div>
           <div className="text-2xl font-black font-mono text-rose-600 tabular-nums">
             {totalSupplierDebt.toLocaleString()}{' '}
-            <span className="text-xs font-normal text-slate-500">ر.س</span>
+            <span className="text-xs font-normal text-slate-500">ر.ي</span>
           </div>
           <div className="text-[11px] text-slate-500 mt-2">
             مستحقة لـ <span className="font-bold text-slate-700">{suppliers.length} موردين معتمدين</span>
@@ -314,7 +314,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
           </div>
           <div className="text-2xl font-black font-mono text-[#009432] tabular-nums">
             {totalGroceryDebt.toLocaleString()}{' '}
-            <span className="text-xs font-normal text-slate-500">ر.س</span>
+            <span className="text-xs font-normal text-slate-500">ر.ي</span>
           </div>
           <div className="text-[11px] text-slate-500 mt-2">
             موزعة على <span className="font-bold text-slate-700">{groceries.length} بقالات شريكة</span>
@@ -331,7 +331,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
           </div>
           <div className="text-2xl font-black font-mono text-[#0c2461] tabular-nums bg-[#f6b93b]/20 px-2 py-0.5 rounded-lg inline-block">
             {netBalance >= 0 ? `+${netBalance.toLocaleString()}` : netBalance.toLocaleString()}{' '}
-            <span className="text-xs font-normal text-slate-800">ر.س</span>
+            <span className="text-xs font-normal text-slate-800">ر.ي</span>
           </div>
           <div className="text-[11px] text-slate-500 mt-2">
             فائض المستحقات مقابل التزامات الموردين
@@ -390,7 +390,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                 >
                   {groceries.map((g) => (
                     <option key={g.id} value={g.id}>
-                      ({g.code}) {g.name} - الرصيد: {g.balance.toLocaleString()} ر.س
+                      ({g.code}) {g.name} - الرصيد: {g.balance.toLocaleString()} ر.ي
                     </option>
                   ))}
                 </select>
@@ -497,13 +497,13 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                       <td className="p-2.5 font-mono text-slate-600">{row.date}</td>
                       <td className="p-2.5 font-medium text-slate-900">{row.description}</td>
                       <td className="p-2.5 text-center font-mono tabular-nums text-slate-800">
-                        {row.debit > 0 ? `${row.debit.toLocaleString()} ر.س` : '-'}
+                        {row.debit > 0 ? `${row.debit.toLocaleString()} ر.ي` : '-'}
                       </td>
                       <td className="p-2.5 text-center font-mono tabular-nums text-[#009432] font-bold">
-                        {row.credit > 0 ? `${row.credit.toLocaleString()} ر.س` : '-'}
+                        {row.credit > 0 ? `${row.credit.toLocaleString()} ر.ي` : '-'}
                       </td>
                       <td className="p-2.5 text-center font-mono font-bold tabular-nums text-[#0c2461] bg-slate-100/70">
-                        {row.balance.toLocaleString()} ر.س
+                        {row.balance.toLocaleString()} ر.ي
                       </td>
                     </tr>
                   ))}
@@ -526,7 +526,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                 >
                   {suppliers.map((s) => (
                     <option key={s.id} value={s.id}>
-                      {s.name} - المستحق له: {s.balance.toLocaleString()} ر.س
+                      {s.name} - المستحق له: {s.balance.toLocaleString()} ر.ي
                     </option>
                   ))}
                 </select>
@@ -633,13 +633,13 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                       <td className="p-2.5 font-mono text-slate-600">{row.date}</td>
                       <td className="p-2.5 font-medium text-slate-900">{row.description}</td>
                       <td className="p-2.5 text-center font-mono tabular-nums text-slate-800">
-                        {row.debit > 0 ? `${row.debit.toLocaleString()} ر.س` : '-'}
+                        {row.debit > 0 ? `${row.debit.toLocaleString()} ر.ي` : '-'}
                       </td>
                       <td className="p-2.5 text-center font-mono tabular-nums text-[#009432] font-bold">
-                        {row.credit > 0 ? `${row.credit.toLocaleString()} ر.س` : '-'}
+                        {row.credit > 0 ? `${row.credit.toLocaleString()} ر.ي` : '-'}
                       </td>
                       <td className="p-2.5 text-center font-mono font-bold tabular-nums text-[#0c2461] bg-slate-100/70">
-                        {row.balance.toLocaleString()} ر.س
+                        {row.balance.toLocaleString()} ر.ي
                       </td>
                     </tr>
                   ))}
@@ -705,7 +705,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                         <td className="p-2.5 font-mono text-slate-600">{voucher.date}</td>
                         <td className="p-2.5 font-bold text-slate-900">{voucher.partyName}</td>
                         <td className="p-2.5 text-center font-mono font-bold text-sm text-[#0c2461] tabular-nums">
-                          {voucher.amount.toLocaleString()} ر.س
+                          {voucher.amount.toLocaleString()} ر.ي
                         </td>
                         <td className="p-2.5 text-center text-slate-700">
                           {voucher.paymentMethod === 'cash' ? 'نقداً' : voucher.paymentMethod === 'transfer' ? 'تحويل' : 'شيك'}

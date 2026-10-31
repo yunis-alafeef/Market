@@ -369,7 +369,7 @@ function AppInner() {
       `كشف ${settledSheet.dayName} (${settledSheet.date})`,
       'قيد العمل',
       'مرحل ومقفل ✅',
-      `تم ترحيل مبيعات بقيمة ${settledSheet.totalSale.toLocaleString()} ر.س ومشتريات بقيمة ${settledSheet.totalCost.toLocaleString()} ر.س وإجمالي ${totalQty} وحدة وتصفير الحقول ليوم جديد.`
+      `تم ترحيل مبيعات بقيمة ${settledSheet.totalSale.toLocaleString()} ر.ي ومشتريات بقيمة ${settledSheet.totalCost.toLocaleString()} ر.ي وإجمالي ${totalQty} وحدة وتصفير الحقول ليوم جديد.`
     );
 
     // Automatic Daily Backup to Supabase (Requirement)
@@ -474,9 +474,9 @@ function AppInner() {
         logAudit(
           'تسجيل سند قبض',
           `${g.name} (${g.code})`,
-          `${oldB.toLocaleString()} ر.س`,
-          `${newB.toLocaleString()} ر.س`,
-          `سند رقم ${newVoucher.voucherNumber} بمبلغ ${voucherData.amount.toLocaleString()} ر.س`
+          `${oldB.toLocaleString()} ر.ي`,
+          `${newB.toLocaleString()} ر.ي`,
+          `سند رقم ${newVoucher.voucherNumber} بمبلغ ${voucherData.amount.toLocaleString()} ر.ي`
         );
       }
     } else if (voucherData.type === 'payment' && voucherData.partyType === 'supplier') {
@@ -487,9 +487,9 @@ function AppInner() {
         logAudit(
           'تسجيل سند صرف',
           s.name,
-          `${oldB.toLocaleString()} ر.س`,
-          `${newB.toLocaleString()} ر.س`,
-          `سند رقم ${newVoucher.voucherNumber} بمبلغ ${voucherData.amount.toLocaleString()} ر.س`
+          `${oldB.toLocaleString()} ر.ي`,
+          `${newB.toLocaleString()} ر.ي`,
+          `سند رقم ${newVoucher.voucherNumber} بمبلغ ${voucherData.amount.toLocaleString()} ر.ي`
         );
       }
     }

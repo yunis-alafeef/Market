@@ -1,4 +1,4 @@
-﻿import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { DailySheet, SystemSettings, Grocery, Supplier } from '../types';
 import {
   Calendar,
@@ -454,14 +454,14 @@ export const AdminReportsView: React.FC<AdminReportsViewProps> = ({
           <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200">
             <span className="text-xs text-slate-500 block mb-1">إجمالي مبيعات الفترة</span>
             <div className="text-lg sm:text-xl font-black font-mono text-[#0c2461] tabular-nums">
-              {periodMetrics.totalSale.toLocaleString()} <span className="text-xs font-normal text-slate-500">ر.س</span>
+              {periodMetrics.totalSale.toLocaleString()} <span className="text-xs font-normal text-slate-500">ر.ي</span>
             </div>
           </div>
 
           <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200">
             <span className="text-xs text-slate-500 block mb-1">إجمالي مشتريات الفترة</span>
             <div className="text-lg sm:text-xl font-black font-mono text-slate-800 tabular-nums">
-              {periodMetrics.totalCost.toLocaleString()} <span className="text-xs font-normal text-slate-500">ر.س</span>
+              {periodMetrics.totalCost.toLocaleString()} <span className="text-xs font-normal text-slate-500">ر.ي</span>
             </div>
           </div>
 
@@ -547,7 +547,7 @@ export const AdminReportsView: React.FC<AdminReportsViewProps> = ({
                         isSelected ? 'text-white' : 'text-[#0c2461]'
                       }`}
                     >
-                      {sheet.totalSale.toLocaleString()} ر.س
+                      {sheet.totalSale.toLocaleString()} ر.ي
                     </span>
                   </div>
 
@@ -586,7 +586,7 @@ export const AdminReportsView: React.FC<AdminReportsViewProps> = ({
                   كشف يوم {currentSheet.dayName} ({currentSheet.date})
                 </h3>
                 <span className="text-xs text-slate-500">
-                  {currentSheet.rows.length} أصناف مسجلة • مبيعات {currentSheet.totalSale.toLocaleString()} ر.س
+                  {currentSheet.rows.length} أصناف مسجلة • مبيعات {currentSheet.totalSale.toLocaleString()} ر.ي
                 </span>
               </div>
             </div>
@@ -668,10 +668,10 @@ export const AdminReportsView: React.FC<AdminReportsViewProps> = ({
                           {row.totalQuantity}
                         </td>
                         <td className="p-2.5 text-center font-mono tabular-nums text-slate-700">
-                          {row.costPrice.toLocaleString()} ر.س
+                          {row.costPrice.toLocaleString()} ر.ي
                         </td>
                         <td className="p-2.5 text-center font-mono font-semibold tabular-nums text-slate-900">
-                          {row.totalCost.toLocaleString()} ر.س
+                          {row.totalCost.toLocaleString()} ر.ي
                         </td>
                         <td className="p-2.5 text-center">
                           <span
@@ -697,7 +697,7 @@ export const AdminReportsView: React.FC<AdminReportsViewProps> = ({
                     </td>
                     <td className="p-2 text-center">-</td>
                     <td className="p-2 text-center font-mono font-bold text-slate-900 tabular-nums">
-                      {currentSheet.totalCost.toLocaleString()} ر.س
+                      {currentSheet.totalCost.toLocaleString()} ر.ي
                     </td>
                     <td className="p-2 text-center text-slate-500">-</td>
                   </tr>
@@ -757,17 +757,17 @@ export const AdminReportsView: React.FC<AdminReportsViewProps> = ({
               <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-2xs">
                 <span className="text-[11px] text-slate-500 block mb-1">إجمالي المبيعات للفترة</span>
                 <div className="text-xl font-black font-mono text-[#0c2461] tabular-nums">
-                  {periodMetrics.totalSale.toLocaleString()} <span className="text-xs font-normal text-slate-500">ر.س</span>
+                  {periodMetrics.totalSale.toLocaleString()} <span className="text-xs font-normal text-slate-500">ر.ي</span>
                 </div>
                 <div className="text-[10px] text-slate-400 mt-0.5 font-mono">
-                  متوسط يومي: {periodMetrics.avgDailySale.toLocaleString()} ر.س
+                  متوسط يومي: {periodMetrics.avgDailySale.toLocaleString()} ر.ي
                 </div>
               </div>
 
               <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-2xs">
                 <span className="text-[11px] text-slate-500 block mb-1">تكلفة المشتريات للفترة</span>
                 <div className="text-xl font-black font-mono text-slate-800 tabular-nums">
-                  {periodMetrics.totalCost.toLocaleString()} <span className="text-xs font-normal text-slate-500">ر.س</span>
+                  {periodMetrics.totalCost.toLocaleString()} <span className="text-xs font-normal text-slate-500">ر.ي</span>
                 </div>
                 <div className="text-[10px] text-slate-400 mt-0.5">
                   من السوق المركزي والموردين
@@ -857,7 +857,7 @@ export const AdminReportsView: React.FC<AdminReportsViewProps> = ({
                 <div className="space-y-4">
                   <div className="flex items-center justify-between text-xs text-slate-500 font-medium">
                     <span>إحصائية توزيع ومبيعات كل بقالة خلال الفترة المحددة:</span>
-                    <span className="font-mono">إجمالي المبيعات: {periodMetrics.totalSale.toLocaleString()} ر.س</span>
+                    <span className="font-mono">إجمالي المبيعات: {periodMetrics.totalSale.toLocaleString()} ر.ي</span>
                   </div>
 
                   <div className="overflow-x-auto border border-slate-200 rounded-2xl">
@@ -892,7 +892,7 @@ export const AdminReportsView: React.FC<AdminReportsViewProps> = ({
                               {item.qty.toLocaleString()} وحدة
                             </td>
                             <td className="p-3 text-center font-mono font-black text-[#0c2461] tabular-nums bg-amber-50/50">
-                              {item.amount.toLocaleString()} ر.س
+                              {item.amount.toLocaleString()} ر.ي
                             </td>
                             <td className="p-3 text-center font-mono font-bold text-slate-700 tabular-nums">
                               %{item.share}
@@ -915,7 +915,7 @@ export const AdminReportsView: React.FC<AdminReportsViewProps> = ({
                             {periodMetrics.totalUnits.toLocaleString()} وحدة
                           </td>
                           <td className="p-3 text-center font-mono font-black text-[#0c2461] tabular-nums bg-amber-100/60">
-                            {periodMetrics.totalSale.toLocaleString()} ر.س
+                            {periodMetrics.totalSale.toLocaleString()} ر.ي
                           </td>
                           <td className="p-3 text-center font-mono font-bold">100%</td>
                           <td className="p-3 text-center">-</td>
@@ -963,7 +963,7 @@ export const AdminReportsView: React.FC<AdminReportsViewProps> = ({
                               {sheet.rows.length} صنف
                             </td>
                             <td className="p-3 text-center font-mono font-bold text-[#006266] tabular-nums">
-                              {sheet.totalCost.toLocaleString()} ر.س
+                              {sheet.totalCost.toLocaleString()} ر.ي
                             </td>
                             <td className="p-3 text-center">
                               <span
@@ -1003,7 +1003,7 @@ export const AdminReportsView: React.FC<AdminReportsViewProps> = ({
                 <div className="space-y-4">
                   <div className="flex items-center justify-between text-xs text-slate-500 font-medium">
                     <span>مشتريات السوق المركزي والموردين في الفترة:</span>
-                    <span className="font-mono">إجمالي الشراء: {periodMetrics.totalCost.toLocaleString()} ر.س</span>
+                    <span className="font-mono">إجمالي الشراء: {periodMetrics.totalCost.toLocaleString()} ر.ي</span>
                   </div>
 
                   <div className="overflow-x-auto border border-slate-200 rounded-2xl">
@@ -1035,7 +1035,7 @@ export const AdminReportsView: React.FC<AdminReportsViewProps> = ({
                               {item.qty.toLocaleString()} وحدة
                             </td>
                             <td className="p-3 text-center font-mono font-black text-slate-900 tabular-nums">
-                              {item.cost.toLocaleString()} ر.س
+                              {item.cost.toLocaleString()} ر.ي
                             </td>
                             <td className="p-3 text-center font-mono font-bold text-slate-700 tabular-nums">
                               %{item.share}
@@ -1082,7 +1082,7 @@ export const AdminReportsView: React.FC<AdminReportsViewProps> = ({
                               {it.totalQty.toLocaleString()}
                             </td>
                             <td className="p-3 text-center font-mono font-bold text-slate-800 tabular-nums">
-                              {it.totalCost.toLocaleString()} ر.س
+                              {it.totalCost.toLocaleString()} ر.ي
                             </td>
                           </tr>
                         ))}

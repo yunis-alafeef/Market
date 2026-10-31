@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   SystemSettings,
   Grocery,
@@ -950,7 +950,7 @@ VITE_SUPABASE_ANON_KEY="sb_publishable_DesBAjmOQwAYOtcKggQwFQ__vkAjme5"`}
                       <td className="p-2.5 text-slate-700">{g.ownerName}</td>
                       <td className="p-2.5 font-mono text-slate-600">+967 {g.phone}</td>
                       <td className="p-2.5 text-center font-mono font-bold text-[#0c2461] tabular-nums">
-                        {g.balance.toLocaleString()} ر.س
+                        {g.balance.toLocaleString()} ر.ي
                       </td>
                       <td className="p-2.5 text-center">
                         {groceries.length > 2 && (
@@ -1089,7 +1089,7 @@ VITE_SUPABASE_ANON_KEY="sb_publishable_DesBAjmOQwAYOtcKggQwFQ__vkAjme5"`}
                         <td className="p-2.5 text-slate-600">{s.specialty}</td>
                         <td className="p-2.5 font-mono text-slate-600">+967 {s.phone}</td>
                         <td className="p-2.5 text-center font-mono font-bold text-rose-600 tabular-nums">
-                          {s.balance.toLocaleString()} ر.س
+                          {s.balance.toLocaleString()} ر.ي
                         </td>
                         <td className="p-2.5 text-center">
                           <button

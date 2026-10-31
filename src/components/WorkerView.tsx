@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import {
   DailySheet,
   DailyOrderRow,
@@ -229,7 +229,7 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
     };
 
     recalculateAndSave([...sheet.rows, newRow]);
-    onAddAuditLog('إضافة منتج للكشف', item.name, '', `سعر البيع الافتراضي: ${item.defaultSalePrice} ر.س`);
+    onAddAuditLog('إضافة منتج للكشف', item.name, '', `سعر البيع الافتراضي: ${item.defaultSalePrice} ر.ي`);
   };
 
   // Purchase Status Toggle
@@ -377,7 +377,7 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
 
     if (zeroPriceItems.length > 0) {
       const detailsList = zeroPriceItems
-        .map((r) => `• ${r.itemName} (${r.unit}): كمية [${r.totalQuantity}] - سعر الشراء: [${r.costPrice || 0} ر.س]`)
+        .map((r) => `• ${r.itemName} (${r.unit}): كمية [${r.totalQuantity}] - سعر الشراء: [${r.costPrice || 0} ر.ي]`)
         .join('\n');
 
       alert(
@@ -567,7 +567,7 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
             <span className="text-xs text-slate-500 block whitespace-nowrap">تكلفة الشراء</span>
             <span className="text-xl sm:text-2xl font-black font-mono tabular-nums text-[#0c2461]">
               {sheet.totalCost.toLocaleString()}{' '}
-              <span className="text-xs font-normal text-slate-500">ر.س</span>
+              <span className="text-xs font-normal text-slate-500">ر.ي</span>
             </span>
           </div>
         )}
@@ -576,7 +576,7 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
           <span className="text-xs text-slate-500 block whitespace-nowrap">إجمالي المبيعات</span>
           <span className="text-xl sm:text-2xl font-black font-mono tabular-nums text-[#0c2461] bg-[#f6b93b]/20 px-2 py-0.5 rounded-lg inline-block">
             {sheet.totalSale.toLocaleString()}{' '}
-            <span className="text-xs font-normal text-slate-800">ر.س</span>
+            <span className="text-xs font-normal text-slate-800">ر.ي</span>
           </span>
         </div>
       </div>
@@ -625,7 +625,7 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
                 </option>
                 {availableItemsToAdd.map((it) => (
                   <option key={it.id} value={it.id}>
-                    {it.name} ({it.unit}) - بيع: {it.defaultSalePrice} ر.س
+                    {it.name} ({it.unit}) - بيع: {it.defaultSalePrice} ر.ي
                   </option>
                 ))}
               </select>
@@ -678,7 +678,7 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
                 </span>
               </div>
               <div className="text-xs font-mono font-bold bg-white/10 px-2.5 py-1 rounded-xl text-amber-200">
-                إجمالي التوزيع العام: {sheet.totalSale.toLocaleString()} ر.س
+                إجمالي التوزيع العام: {sheet.totalSale.toLocaleString()} ر.ي
               </div>
             </div>
 
@@ -698,7 +698,7 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
                   </div>
                   <div className="flex items-baseline justify-between mt-0.5">
                     <span className="text-xs font-mono font-black text-white tabular-nums">
-                      {gt.totalAmount.toLocaleString()} <span className="text-[9px] font-normal text-amber-300">ر.س</span>
+                      {gt.totalAmount.toLocaleString()} <span className="text-[9px] font-normal text-amber-300">ر.ي</span>
                     </span>
                     <span className="text-[10px] font-mono text-slate-300 tabular-nums">
                       {gt.totalQty} وحدة
@@ -721,7 +721,7 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
                       كمية: <strong className="text-[#006266] font-bold">{groceryTotals.find(gt => gt.groceryId === activeCardGroceryId)?.totalQty || 0} وحدة</strong>
                     </span>
                     <span className="text-amber-800 bg-amber-100 font-mono text-xs px-2 py-0.5 rounded-lg font-black">
-                      فاتورة: {(groceryTotals.find(gt => gt.groceryId === activeCardGroceryId)?.totalAmount || 0).toLocaleString()} ر.س
+                      فاتورة: {(groceryTotals.find(gt => gt.groceryId === activeCardGroceryId)?.totalAmount || 0).toLocaleString()} ر.ي
                     </span>
                   </div>
                 </div>
@@ -756,7 +756,7 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
                             isSelected ? 'bg-white/20 text-white font-bold' : 'bg-slate-200 text-slate-700'
                           }`}
                         >
-                          {(gTotal?.totalAmount || 0).toLocaleString()} ر.س
+                          {(gTotal?.totalAmount || 0).toLocaleString()} ر.ي
                         </span>
                       </button>
                     );
@@ -865,7 +865,7 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
                                 className="w-16 text-center font-mono font-black text-xs py-0.5 bg-transparent text-[#006266] focus:outline-none"
                                 title="تحديد سعر الشراء"
                               />
-                              <span className="text-[10px] text-slate-500 font-bold">ر.س</span>
+                              <span className="text-[10px] text-slate-500 font-bold">ر.ي</span>
                             </div>
                           </div>
 
@@ -1012,7 +1012,7 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
                               {g.name.replace('بقالة', '').replace('سوبرماركت', '')}
                             </div>
                             <div className="mt-1 bg-amber-400 text-[#0c2461] px-1.5 py-0.5 rounded text-[10px] font-black tabular-nums shadow-xs">
-                              {(gTotal?.totalAmount || 0).toLocaleString()} ر.س
+                              {(gTotal?.totalAmount || 0).toLocaleString()} ر.ي
                             </div>
                             <div className="text-[9px] text-slate-300 font-mono mt-0.5">
                               {gTotal?.totalQty || 0} وحدة
@@ -1145,7 +1145,7 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
                               className="w-22 text-center font-mono text-xs py-1 px-1.5 bg-emerald-50 hover:bg-emerald-100/50 border border-emerald-400 focus:border-[#006266] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#006266]/40 text-[#006266] font-black shadow-2xs"
                               title="تحديد سعر الشراء للوحدة مباشرة من الجدول"
                             />
-                            <span className="text-[10px] text-slate-600 font-bold">ر.س</span>
+                            <span className="text-[10px] text-slate-600 font-bold">ر.ي</span>
                           </div>
                         </td>
 
@@ -1202,7 +1202,7 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
                           >
                             <div className="text-xs font-black text-[#0c2461] tabular-nums whitespace-nowrap">
                               {(gTotal?.totalAmount || 0).toLocaleString()}{' '}
-                              <span className="text-[10px] font-bold text-amber-800">ر.س</span>
+                              <span className="text-[10px] font-bold text-amber-800">ر.ي</span>
                             </div>
                             <div className="text-[11px] font-bold text-slate-700 tabular-nums whitespace-nowrap mt-0.5">
                               {gTotal?.totalQty || 0}{' '}
@@ -1221,7 +1221,7 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
                       {/* Total Purchase Cost */}
                       <td className="p-2 text-center font-mono font-black text-xs text-[#006266] tabular-nums whitespace-nowrap bg-emerald-100/80 border-x border-emerald-300">
                         <div className="text-sm font-black text-[#006266]">
-                          {sheet.totalCost.toLocaleString()} <span className="text-[10px]">ر.س</span>
+                          {sheet.totalCost.toLocaleString()} <span className="text-[10px]">ر.ي</span>
                         </div>
                         <div className="text-[9px] font-bold text-slate-600">
                           إجمالي المشتريات
@@ -1266,7 +1266,7 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
                                     type="button"
                                     onClick={() => handleAddProductToSheet(it.id)}
                                     className="px-2.5 py-1 text-xs font-bold text-[#006266] bg-white border border-[#006266]/30 hover:bg-[#006266] hover:text-white rounded-lg transition-colors cursor-pointer shadow-2xs active:scale-95"
-                                    title={`إضافة ${it.name} بسعر ${it.defaultSalePrice} ر.س`}
+                                    title={`إضافة ${it.name} بسعر ${it.defaultSalePrice} ر.ي`}
                                   >
                                     + {it.name} ({it.unit})
                                   </button>
@@ -1355,7 +1355,7 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
                         <div className="text-left font-mono">
                           <span className="text-xs text-slate-300 block">فاتورة التوزيع</span>
                           <span className="text-sm font-bold text-[#f6b93b] tabular-nums">
-                            {groceryTotalAmount.toLocaleString()} ر.س
+                            {groceryTotalAmount.toLocaleString()} ر.ي
                           </span>
                         </div>
                       </div>
@@ -1433,7 +1433,7 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
                       <div className="text-slate-600 whitespace-nowrap">
                         الرصيد السابق:{' '}
                         <span className="font-bold font-mono text-slate-800 tabular-nums">
-                          {grocery.balance.toLocaleString()} ر.س
+                          {grocery.balance.toLocaleString()} ر.ي
                         </span>
                       </div>
                     </div>
