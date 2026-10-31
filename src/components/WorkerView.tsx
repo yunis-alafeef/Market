@@ -40,6 +40,10 @@ interface WorkerViewProps {
   onOpenPrintModal: (type: 'daily_invoice' | 'morning_sort') => void;
   onAddAuditLog: (action: string, target: string, oldVal?: string, newVal?: string, details?: string) => void;
   onUpdateItemPrice?: (itemId: string, costPrice: number, salePrice: number) => void;
+  onSettleSheet?: (sheet: DailySheet) => void;
+  isManagerEditMode?: boolean;
+  onSaveManagerEditAndResettle?: (sheet: DailySheet) => void;
+  onBackToReports?: () => void;
 }
 
 export const WorkerView: React.FC<WorkerViewProps> = ({
@@ -55,19 +59,24 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
   onOpenPrintModal,
   onAddAuditLog,
   onUpdateItemPrice,
+  onSettleSheet,
+  isManagerEditMode = false,
+  onSaveManagerEditAndResettle,
+  onBackToReports,
 }) => {
   // Tabs: 'night_orders' (طلبات الليل والشراء) vs 'morning_sort' (فرز وتوزيع الصباح)
   const [activeTab, setActiveTab] = useState<'night_orders' | 'morning_sort'>('night_orders');
-  // View mode for night orders: 'table' (Default Matrix Grid) vs 'cards' (Secondary Touch Cards)
-  const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
-  // Selected grocery for the mobile cards stepper
+  // View mode is fixed to 'table' (الجدول الافتراضي) as required
+  const viewMode = 'table';
+  // Selected grocery for the mobile cards stepper (kept for compatibility)
   const [activeCardGroceryId, setActiveCardGroceryId] = useState<string>(groceries[0]?.id || '');
   // Selected grocery filter for morning sort view
   const [selectedSortGrocery, setSelectedSortGrocery] = useState<string>('all');
   // Active row being quick-edited with fractions pad
   const [activeCell, setActiveCell] = useState<{ rowId: string; groceryId: string } | null>(null);
 
-  const isLocked = settings.permissions.lockDailySheetAfterSave && sheet.nightOrdersSaved && currentRole === 'worker';
+  // During morning or when not settled, fields remain editable freely. If locked after night save, manager edit mode overrides it.
+  const isLocked = isManagerEditMode ? false : (settings.permissions.lockDailySheetAfterSave && sheet.status === 'settled' && currentRole === 'worker');
 
   // Incremental stepper helper (+ / -)
   const handleStepQuantity = (rowId: string, groceryId: string, delta: number) => {
@@ -267,9 +276,9 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
 
   // Recalculate sheet totals
   const recalculateAndSave = (newRows: DailyOrderRow[]) => {
-    const totalCost = newRows.reduce((sum, r) => sum + r.totalCost, 0);
-    const totalSale = newRows.reduce((sum, r) => sum + r.totalSale, 0);
-    const totalProfit = totalSale - totalCost;
+    const totalCost = Math.round(newRows.reduce((sum, r) => sum + (Number(r.totalCost) || 0), 0) * 100) / 100;
+    const totalSale = Math.round(newRows.reduce((sum, r) => sum + (Number(r.totalSale) || 0), 0) * 100) / 100;
+    const totalProfit = Math.round((totalSale - totalCost) * 100) / 100;
 
     onUpdateSheet({
       ...sheet,
@@ -326,7 +335,22 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
       `تم تثبيت ${sheet.rows.length} صنف بإجمالي ${totalQty} وحدة وتوليد جداول فرز الصباح`
     );
 
-    alert('✅ تم حفظ طلبات الليل وتوليد جداول فرز الصباح المستقلة لكل بقالة بنجاح!');
+    alert('✅ [🌙 تم حفظ طلبات الليل وتثبيت الجدول السفلي وبطاقات الفرز بنجاح!]');
+  };
+
+  // Settle and transfer purchases handler
+  const handleSettleAndReset = () => {
+    if (sheet.rows.length === 0 || sheet.rows.every((r) => (r.totalQuantity || 0) === 0)) {
+      if (!window.confirm('الكشف فارغ حالياً. هل أنت متأكد من حفظ الشراء وترحيل الحسابات؟')) return;
+    } else {
+      if (!window.confirm(`هل أنت متأكد من حفظ الشراء وترحيل حسابات اليوم (${sheet.dayName} ${sheet.date})؟\nسيتم نقل الفواتير إلى كشوفات البقالات والموردين وتصفير الحقول ليوم جديد.`)) {
+        return;
+      }
+    }
+
+    if (onSettleSheet) {
+      onSettleSheet(sheet);
+    }
   };
 
   // Morning Sort Delivery Toggle
@@ -382,6 +406,46 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
 
   return (
     <div className="space-y-4 max-w-7xl mx-auto pb-20">
+      {/* Manager Comprehensive Edit Banner */}
+      {isManagerEditMode && (
+        <div className="bg-gradient-to-r from-purple-900 via-indigo-900 to-purple-800 text-white rounded-2xl p-4 sm:p-5 shadow-lg border-2 border-purple-400 flex flex-wrap items-center justify-between gap-4 animate-in fade-in">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-purple-500/30 border border-purple-300 flex items-center justify-center shrink-0">
+              <Lock className="w-5 h-5 text-amber-300" />
+            </div>
+            <div>
+              <h3 className="font-black text-sm sm:text-base text-amber-300">
+                🔒 وضع التعديل الشامل للمدير مفعل الآن على كشف: {sheet.dayName} ({sheet.date})
+              </h3>
+              <p className="text-xs text-purple-100 mt-0.5">
+                (يمكنك تعديل كميات البقالات، أو زيادة العدد الإجمالي، أو تعديل السعر والمورد، وسيتم الترحيل بنفس تاريخ هذا اليوم دون تغييره).
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2.5">
+            <button
+              type="button"
+              onClick={() => onSaveManagerEditAndResettle && onSaveManagerEditAndResettle(sheet)}
+              className="flex items-center gap-2 px-5 py-2.5 text-xs sm:text-sm font-black text-slate-900 bg-gradient-to-r from-amber-400 to-yellow-400 hover:from-amber-300 hover:to-yellow-300 rounded-xl transition-all shadow-md cursor-pointer active:scale-95 whitespace-nowrap"
+            >
+              <Save className="w-4 h-4 text-slate-900" />
+              <span>💾 حفظ التعديل وإعادة الترحيل بنفس التاريخ</span>
+            </button>
+
+            {onBackToReports && (
+              <button
+                type="button"
+                onClick={onBackToReports}
+                className="flex items-center gap-1.5 px-4 py-2.5 text-xs sm:text-sm font-bold text-white bg-slate-800/80 hover:bg-slate-800 border border-slate-600 rounded-xl transition-all cursor-pointer whitespace-nowrap"
+              >
+                <span>↩️ العودة لصفحة التقارير</span>
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Top Banner / Date & Mode Strip */}
       <div className="bg-white rounded-2xl shadow-xs border border-slate-200 p-4 sm:p-5 flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3">
@@ -419,65 +483,10 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
           </div>
         </div>
 
-        {/* View Switchers & Action Controls */}
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Display Mode: Table (Default) vs Cards (Secondary) */}
-          <div className="bg-slate-100 p-1 rounded-xl flex items-center gap-1">
-            <button
-              type="button"
-              onClick={() => setViewMode('table')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer ${
-                viewMode === 'table'
-                  ? 'bg-white text-[#006266] shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-              title="عرض الجدول الميداني الشامل (الافتراضي)"
-            >
-              <TableIcon className="w-3.5 h-3.5" />
-              <span>الجدول (الافتراضي)</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode('cards')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer ${
-                viewMode === 'cards'
-                  ? 'bg-white text-[#006266] shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-              title="عرض بطاقات لمس مخصصة لشاشة الجوال (ثانوي)"
-            >
-              <LayoutGrid className="w-3.5 h-3.5" />
-              <span>البطاقات (ثانوي)</span>
-            </button>
-          </div>
-
-          {/* Tab Switcher: Night Orders vs Morning Sort */}
-          <div className="bg-slate-100 p-1 rounded-xl flex items-center gap-1">
-            <button
-              onClick={() => setActiveTab('night_orders')}
-              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer whitespace-nowrap ${
-                activeTab === 'night_orders'
-                  ? 'bg-[#006266] text-white shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              طلبات الليل ({sheet.rows.length})
-            </button>
-            <button
-              onClick={() => setActiveTab('morning_sort')}
-              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer whitespace-nowrap ${
-                activeTab === 'morning_sort'
-                  ? 'bg-[#006266] text-white shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              فرز الصباح
-            </button>
-          </div>
-
-          {/* Quick Print Button */}
+        {/* Quick Print Button */}
+        <div className="flex items-center gap-2">
           <button
-            onClick={() => onOpenPrintModal(activeTab === 'night_orders' ? 'daily_invoice' : 'morning_sort')}
+            onClick={() => onOpenPrintModal('daily_invoice')}
             className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl transition-colors cursor-pointer whitespace-nowrap"
           >
             <Printer className="w-3.5 h-3.5 text-slate-600" />
@@ -587,13 +596,23 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
           )}
         </div>
 
-        <button
-          onClick={handleSaveNightOrders}
-          className="flex items-center gap-2 px-5 py-2 text-xs sm:text-sm font-black text-white bg-[#009432] hover:bg-[#007b29] rounded-xl transition-all shadow-md cursor-pointer active:scale-95 whitespace-nowrap"
-        >
-          <Save className="w-4 h-4" />
-          <span>حفظ طلبات الليل وتوليد فرز الصباح</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={handleSaveNightOrders}
+            className="flex items-center gap-2 px-4 py-2 text-xs sm:text-sm font-black text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-all shadow-md cursor-pointer active:scale-95 whitespace-nowrap"
+          >
+            <Save className="w-4 h-4" />
+            <span>🌙 حفظ طلبات الليل وإنشاء الجدول السفلي</span>
+          </button>
+
+          <button
+            onClick={handleSettleAndReset}
+            className="flex items-center gap-2 px-5 py-2 text-xs sm:text-sm font-black text-white bg-[#009432] hover:bg-[#007b29] rounded-xl transition-all shadow-md cursor-pointer active:scale-95 whitespace-nowrap"
+          >
+            <CheckCircle2 className="w-4 h-4" />
+            <span>💾 حفظ الشراء وترحيل الحسابات</span>
+          </button>
+        </div>
       </div>
 
       {/* TAB 1: NIGHT ORDERS (CARDS OR TABLE) */}

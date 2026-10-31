@@ -66,99 +66,101 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
           </div>
 
-          {/* Zone 2: Navigation Links (Restricted by Role) */}
-          <nav className="hidden lg:flex items-center gap-6 text-xs sm:text-sm font-black text-slate-200">
-            {/* Worker link (Admin and Worker) */}
-            {(!currentUser || currentUser.role === 'admin' || currentUser.role === 'worker') && (
-              <button
-                type="button"
-                onClick={() => onPageChange('worker')}
-                className={`transition-all whitespace-nowrap shrink-0 cursor-pointer py-1.5 border-b-2 ${
-                  activePage === 'worker'
-                    ? 'border-current font-black'
-                    : 'border-transparent text-slate-200 hover:text-white'
-                }`}
-                style={{
-                  color: activePage === 'worker' ? 'var(--theme-accent)' : undefined,
-                  borderColor: activePage === 'worker' ? 'var(--theme-accent)' : undefined,
-                }}
-              >
-                شاشة العامل الميداني
-              </button>
-            )}
-
-            {/* Admin only views */}
-            {(!currentUser || currentUser.role === 'admin') && (
-              <>
+          {/* Zone 2: Navigation Links (Restricted by Role - Hidden for Worker) */}
+          {currentUser?.role !== 'worker' && (
+            <nav className="hidden lg:flex items-center gap-6 text-xs sm:text-sm font-black text-slate-200">
+              {/* Worker link (Admin and Worker) */}
+              {(!currentUser || currentUser.role === 'admin') && (
                 <button
                   type="button"
-                  onClick={() => onPageChange('dashboard')}
+                  onClick={() => onPageChange('worker')}
                   className={`transition-all whitespace-nowrap shrink-0 cursor-pointer py-1.5 border-b-2 ${
-                    activePage === 'dashboard'
+                    activePage === 'worker'
                       ? 'border-current font-black'
                       : 'border-transparent text-slate-200 hover:text-white'
                   }`}
                   style={{
-                    color: activePage === 'dashboard' ? 'var(--theme-accent)' : undefined,
-                    borderColor: activePage === 'dashboard' ? 'var(--theme-accent)' : undefined,
+                    color: activePage === 'worker' ? 'var(--theme-accent)' : undefined,
+                    borderColor: activePage === 'worker' ? 'var(--theme-accent)' : undefined,
                   }}
                 >
-                  لوحة تحكم المدير
+                  شاشة العامل الميداني
                 </button>
+              )}
 
+              {/* Admin only views */}
+              {(!currentUser || currentUser.role === 'admin') && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => onPageChange('dashboard')}
+                    className={`transition-all whitespace-nowrap shrink-0 cursor-pointer py-1.5 border-b-2 ${
+                      activePage === 'dashboard'
+                        ? 'border-current font-black'
+                        : 'border-transparent text-slate-200 hover:text-white'
+                    }`}
+                    style={{
+                      color: activePage === 'dashboard' ? 'var(--theme-accent)' : undefined,
+                      borderColor: activePage === 'dashboard' ? 'var(--theme-accent)' : undefined,
+                    }}
+                  >
+                    لوحة تحكم المدير
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => onPageChange('reports')}
+                    className={`transition-all whitespace-nowrap shrink-0 cursor-pointer py-1.5 border-b-2 ${
+                      activePage === 'reports'
+                        ? 'border-current font-black'
+                        : 'border-transparent text-slate-200 hover:text-white'
+                    }`}
+                    style={{
+                      color: activePage === 'reports' ? 'var(--theme-accent)' : undefined,
+                      borderColor: activePage === 'reports' ? 'var(--theme-accent)' : undefined,
+                    }}
+                  >
+                    تقارير الأيام والتعديل الشامل
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => onPageChange('settings')}
+                    className={`transition-all whitespace-nowrap shrink-0 cursor-pointer py-1.5 border-b-2 ${
+                      activePage === 'settings'
+                        ? 'border-current font-black'
+                        : 'border-transparent text-slate-200 hover:text-white'
+                    }`}
+                    style={{
+                      color: activePage === 'settings' ? 'var(--theme-accent)' : undefined,
+                      borderColor: activePage === 'settings' ? 'var(--theme-accent)' : undefined,
+                    }}
+                  >
+                    إعدادات النظام والرقابة
+                  </button>
+                </>
+              )}
+
+              {/* Grocery view (Admin and Grocery Owner) */}
+              {(!currentUser || currentUser.role === 'admin' || currentUser.role === 'grocery') && (
                 <button
                   type="button"
-                  onClick={() => onPageChange('reports')}
+                  onClick={() => onPageChange('grocery')}
                   className={`transition-all whitespace-nowrap shrink-0 cursor-pointer py-1.5 border-b-2 ${
-                    activePage === 'reports'
+                    activePage === 'grocery'
                       ? 'border-current font-black'
                       : 'border-transparent text-slate-200 hover:text-white'
                   }`}
                   style={{
-                    color: activePage === 'reports' ? 'var(--theme-accent)' : undefined,
-                    borderColor: activePage === 'reports' ? 'var(--theme-accent)' : undefined,
+                    color: activePage === 'grocery' ? 'var(--theme-accent)' : undefined,
+                    borderColor: activePage === 'grocery' ? 'var(--theme-accent)' : undefined,
                   }}
                 >
-                  تقارير الأيام والتعديل الشامل
+                  بوابة صاحب البقالة
                 </button>
-
-                <button
-                  type="button"
-                  onClick={() => onPageChange('settings')}
-                  className={`transition-all whitespace-nowrap shrink-0 cursor-pointer py-1.5 border-b-2 ${
-                    activePage === 'settings'
-                      ? 'border-current font-black'
-                      : 'border-transparent text-slate-200 hover:text-white'
-                  }`}
-                  style={{
-                    color: activePage === 'settings' ? 'var(--theme-accent)' : undefined,
-                    borderColor: activePage === 'settings' ? 'var(--theme-accent)' : undefined,
-                  }}
-                >
-                  إعدادات النظام والرقابة
-                </button>
-              </>
-            )}
-
-            {/* Grocery view (Admin and Grocery Owner) */}
-            {(!currentUser || currentUser.role === 'admin' || currentUser.role === 'grocery') && (
-              <button
-                type="button"
-                onClick={() => onPageChange('grocery')}
-                className={`transition-all whitespace-nowrap shrink-0 cursor-pointer py-1.5 border-b-2 ${
-                  activePage === 'grocery'
-                    ? 'border-current font-black'
-                    : 'border-transparent text-slate-200 hover:text-white'
-                }`}
-                style={{
-                  color: activePage === 'grocery' ? 'var(--theme-accent)' : undefined,
-                  borderColor: activePage === 'grocery' ? 'var(--theme-accent)' : undefined,
-                }}
-              >
-                بوابة صاحب البقالة
-              </button>
-            )}
-          </nav>
+              )}
+            </nav>
+          )}
 
           {/* Zone 3: User Avatar & Primary Action */}
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
@@ -203,19 +205,21 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             )}
 
-            {/* Quick Action Button */}
-            <button
-              type="button"
-              onClick={onOpenNewVoucher}
-              className="flex items-center gap-1.5 px-4 py-2 text-xs sm:text-sm font-black rounded-2xl transition-all shadow-md cursor-pointer whitespace-nowrap shrink-0 active:scale-95"
-              style={{
-                backgroundColor: 'var(--theme-accent)',
-                color: 'var(--theme-primary)',
-              }}
-            >
-              <PlusCircle className="w-4 h-4" />
-              <span>سند مالي</span>
-            </button>
+            {/* Quick Action Button - Hidden for Worker and removed yellow button */}
+            {currentUser?.role === 'admin' && (
+              <button
+                type="button"
+                onClick={onOpenNewVoucher}
+                className="hidden items-center gap-1.5 px-4 py-2 text-xs sm:text-sm font-black rounded-2xl transition-all shadow-md cursor-pointer whitespace-nowrap shrink-0 active:scale-95"
+                style={{
+                  backgroundColor: 'var(--theme-accent)',
+                  color: 'var(--theme-primary)',
+                }}
+              >
+                <PlusCircle className="w-4 h-4" />
+                <span>سند مالي</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -244,86 +248,88 @@ export const Header: React.FC<HeaderProps> = ({
         )}
       </header>
 
-      {/* MOBILE THUMB-FRIENDLY BOTTOM NAVIGATION BAR */}
-      <div
-        className="lg:hidden fixed bottom-0 left-0 right-0 z-40 border-t px-2 py-2 shadow-2xl print:hidden transition-colors duration-300"
-        style={{
-          backgroundColor: 'var(--theme-card)',
-          borderColor: 'var(--theme-border)',
-        }}
-      >
-        <div className="flex items-center justify-around text-[10px] font-black">
-          {(!currentUser || currentUser.role === 'admin' || currentUser.role === 'worker') && (
-            <button
-              type="button"
-              onClick={() => onPageChange('worker')}
-              className="flex flex-col items-center gap-0.5 py-1 px-2 rounded-xl transition-colors cursor-pointer"
-              style={{
-                color: activePage === 'worker' ? 'var(--theme-worker)' : 'var(--theme-text-muted)',
-              }}
-            >
-              <ShoppingBag className="w-5 h-5" />
-              <span className="whitespace-nowrap">شاشة العامل</span>
-            </button>
-          )}
-
-          {(!currentUser || currentUser.role === 'admin') && (
-            <>
+      {/* MOBILE THUMB-FRIENDLY BOTTOM NAVIGATION BAR - Hidden for Worker */}
+      {currentUser?.role !== 'worker' && (
+        <div
+          className="lg:hidden fixed bottom-0 left-0 right-0 z-40 border-t px-2 py-2 shadow-2xl print:hidden transition-colors duration-300"
+          style={{
+            backgroundColor: 'var(--theme-card)',
+            borderColor: 'var(--theme-border)',
+          }}
+        >
+          <div className="flex items-center justify-around text-[10px] font-black">
+            {(!currentUser || currentUser.role === 'admin') && (
               <button
                 type="button"
-                onClick={() => onPageChange('dashboard')}
+                onClick={() => onPageChange('worker')}
                 className="flex flex-col items-center gap-0.5 py-1 px-2 rounded-xl transition-colors cursor-pointer"
                 style={{
-                  color: activePage === 'dashboard' ? 'var(--theme-primary)' : 'var(--theme-text-muted)',
+                  color: activePage === 'worker' ? 'var(--theme-worker)' : 'var(--theme-text-muted)',
                 }}
               >
-                <DollarSign className="w-5 h-5" />
-                <span className="whitespace-nowrap">اللوحة المالية</span>
+                <ShoppingBag className="w-5 h-5" />
+                <span className="whitespace-nowrap">شاشة العامل</span>
               </button>
+            )}
 
+            {(!currentUser || currentUser.role === 'admin') && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => onPageChange('dashboard')}
+                  className="flex flex-col items-center gap-0.5 py-1 px-2 rounded-xl transition-colors cursor-pointer"
+                  style={{
+                    color: activePage === 'dashboard' ? 'var(--theme-primary)' : 'var(--theme-text-muted)',
+                  }}
+                >
+                  <DollarSign className="w-5 h-5" />
+                  <span className="whitespace-nowrap">اللوحة المالية</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => onPageChange('reports')}
+                  className="flex flex-col items-center gap-0.5 py-1 px-2 rounded-xl transition-colors cursor-pointer"
+                  style={{
+                    color: activePage === 'reports' ? 'var(--theme-primary)' : 'var(--theme-text-muted)',
+                  }}
+                >
+                  <Calendar className="w-5 h-5" />
+                  <span className="whitespace-nowrap">التقارير</span>
+                </button>
+              </>
+            )}
+
+            {(!currentUser || currentUser.role === 'admin' || currentUser.role === 'grocery') && (
               <button
                 type="button"
-                onClick={() => onPageChange('reports')}
+                onClick={() => onPageChange('grocery')}
                 className="flex flex-col items-center gap-0.5 py-1 px-2 rounded-xl transition-colors cursor-pointer"
                 style={{
-                  color: activePage === 'reports' ? 'var(--theme-primary)' : 'var(--theme-text-muted)',
+                  color: activePage === 'grocery' ? 'var(--theme-accent)' : 'var(--theme-text-muted)',
                 }}
               >
-                <Calendar className="w-5 h-5" />
-                <span className="whitespace-nowrap">التقارير</span>
+                <Store className="w-5 h-5" />
+                <span className="whitespace-nowrap">البقالة</span>
               </button>
-            </>
-          )}
+            )}
 
-          {(!currentUser || currentUser.role === 'admin' || currentUser.role === 'grocery') && (
-            <button
-              type="button"
-              onClick={() => onPageChange('grocery')}
-              className="flex flex-col items-center gap-0.5 py-1 px-2 rounded-xl transition-colors cursor-pointer"
-              style={{
-                color: activePage === 'grocery' ? 'var(--theme-accent)' : 'var(--theme-text-muted)',
-              }}
-            >
-              <Store className="w-5 h-5" />
-              <span className="whitespace-nowrap">البقالة</span>
-            </button>
-          )}
-
-          {(!currentUser || currentUser.role === 'admin') && (
-            <button
-              type="button"
-              onClick={() => onPageChange('settings')}
-              className="flex flex-col items-center gap-0.5 py-1 px-2 rounded-xl transition-colors cursor-pointer"
-              style={{
-                color: activePage === 'settings' ? 'var(--theme-primary)' : 'var(--theme-text-muted)',
-              }}
-            >
-              <Sliders className="w-5 h-5" />
-              <span className="whitespace-nowrap">الإعدادات</span>
-            </button>
-          )}
+            {(!currentUser || currentUser.role === 'admin') && (
+              <button
+                type="button"
+                onClick={() => onPageChange('settings')}
+                className="flex flex-col items-center gap-0.5 py-1 px-2 rounded-xl transition-colors cursor-pointer"
+                style={{
+                  color: activePage === 'settings' ? 'var(--theme-primary)' : 'var(--theme-text-muted)',
+                }}
+              >
+                <Sliders className="w-5 h-5" />
+                <span className="whitespace-nowrap">الإعدادات</span>
+              </button>
+            )}
+          </div>
         </div>
-      </div>
+      )}
     </>
   );
 };

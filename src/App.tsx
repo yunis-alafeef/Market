@@ -96,6 +96,9 @@ export default function App() {
     return getEffectiveMarketDate().dateStr;
   });
 
+  // Flag indicating Manager is comprehensively editing a specific past sheet
+  const [managerEditingDate, setManagerEditingDate] = useState<string | null>(null);
+
   // Automatic daily update & night rollover check (handles midnight and 18:00 night shift rollover)
   useEffect(() => {
     const checkMarketRollover = () => {
@@ -245,9 +248,123 @@ export default function App() {
     });
   };
 
+  // Helper to recompute balances from all settled sheets and vouchers accurately without duplication
+  const recalculateAllBalances = (currentSheets: DailySheet[], currentVouchers: Voucher[]) => {
+    // Calculate total purchases per grocery from settled sheets
+    const groceryPurchases: Record<string, number> = {};
+    // Calculate total supplies per supplier from settled sheets
+    const supplierPurchases: Record<string, number> = {};
+
+    currentSheets.forEach((s) => {
+      if (s.status === 'settled') {
+        s.rows.forEach((r) => {
+          // Grocery amounts
+          groceries.forEach((g) => {
+            const q = Number(r.quantities[g.id]) || 0;
+            if (q > 0) {
+              const lineAmount = Math.round(q * (Number(r.salePrice) || 0) * 100) / 100;
+              groceryPurchases[g.id] = (groceryPurchases[g.id] || 0) + lineAmount;
+            }
+          });
+          // Supplier amounts
+          if (r.supplierId) {
+            const lineCost = Math.round((Number(r.totalCost) || 0) * 100) / 100;
+            supplierPurchases[r.supplierId] = (supplierPurchases[r.supplierId] || 0) + lineCost;
+          }
+        });
+      }
+    });
+
+    // Payments / Receipts from vouchers
+    const groceryPaid: Record<string, number> = {};
+    const supplierPaid: Record<string, number> = {};
+
+    currentVouchers.forEach((v) => {
+      if (v.partyType === 'grocery' && v.type === 'receipt') {
+        groceryPaid[v.partyId] = (groceryPaid[v.partyId] || 0) + (Number(v.amount) || 0);
+      } else if (v.partyType === 'supplier' && v.type === 'payment') {
+        supplierPaid[v.partyId] = (supplierPaid[v.partyId] || 0) + (Number(v.amount) || 0);
+      }
+    });
+
+    // Update groceries state
+    setGroceries((prev) =>
+      prev.map((g) => {
+        const totalDebit = Math.round((groceryPurchases[g.id] || 0) * 100) / 100;
+        const totalCredit = Math.round((groceryPaid[g.id] || 0) * 100) / 100;
+        const netBal = Math.max(0, Math.round((totalDebit - totalCredit) * 100) / 100);
+        return { ...g, balance: netBal };
+      })
+    );
+
+    // Update suppliers state
+    setSuppliers((prev) =>
+      prev.map((s) => {
+        const totalOwed = Math.round((supplierPurchases[s.id] || 0) * 100) / 100;
+        const totalPaid = Math.round((supplierPaid[s.id] || 0) * 100) / 100;
+        const netBal = Math.max(0, Math.round((totalOwed - totalPaid) * 100) / 100);
+        return { ...s, balance: netBal };
+      })
+    );
+  };
+
+  // Normal Worker Settling: Mark settled, update ledgers, zero out worksheet
+  const handleSettleWorkerSheet = (sheetToSettle: DailySheet) => {
+    const totalQty = sheetToSettle.rows.reduce((sum, r) => sum + (Number(r.totalQuantity) || 0), 0);
+    const settledSheet: DailySheet = {
+      ...sheetToSettle,
+      status: 'settled',
+      nightOrdersSaved: true,
+      morningSortGenerated: true,
+      updatedAt: new Date().toLocaleTimeString('ar-SA'),
+    };
+
+    const nextSheets = dailySheets.map((s) => (s.id === settledSheet.id ? settledSheet : s));
+    if (!nextSheets.some((s) => s.id === settledSheet.id)) {
+      nextSheets.unshift(settledSheet);
+    }
+    setDailySheets(nextSheets);
+    recalculateAllBalances(nextSheets, vouchers);
+
+    logAudit(
+      'حفظ الشراء وترحيل الحسابات',
+      `كشف ${settledSheet.dayName} (${settledSheet.date})`,
+      'قيد العمل',
+      'مرحل ومقفل ✅',
+      `تم ترحيل مبيعات بقيمة ${settledSheet.totalSale.toLocaleString()} ر.س ومشتريات بقيمة ${settledSheet.totalCost.toLocaleString()} ر.س وإجمالي ${totalQty} وحدة وتصفير الحقول ليوم جديد.`
+    );
+
+    // Generate fresh clean blank rows for the new day
+    const effective = getEffectiveMarketDate();
+    const blankRows = generateCleanRows(items, suppliers, groceries, effective.dateStr);
+
+    const freshNewSheet: DailySheet = {
+      id: `sheet_${effective.dateStr}_${Date.now()}`,
+      date: effective.dateStr,
+      dayName: effective.dayName,
+      status: 'open',
+      rows: blankRows,
+      totalCost: 0,
+      totalSale: 0,
+      totalProfit: 0,
+      notes: 'كشف عمل جديد بعد الترحيل والتصفير التلقائي',
+      nightOrdersSaved: false,
+      morningSortGenerated: false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    setDailySheets((prev) => [freshNewSheet, ...prev.filter((s) => s.id !== freshNewSheet.id)]);
+    setCurrentWorksheetDate(effective.dateStr);
+    setManagerEditingDate(null);
+
+    alert('✅ تم ترحيل الشراء والحسابات بنجاح إلى كشوفات المدير وصفحة التقارير، وتصفير الواجهة لتصبح فارغة ونظيفة وجاهزة ليوم جديد!');
+  };
+
   // The KEY REQUIRED FEATURE: "تعديل شامل لليوم"
   const handleEditDayComprehensive = (sheet: DailySheet) => {
     setCurrentWorksheetDate(sheet.date);
+    setManagerEditingDate(sheet.date);
     setActivePage('worker');
     logAudit(
       'تعديل شامل لليوم',
@@ -256,6 +373,32 @@ export default function App() {
       'فتح شاشة الكشف اليومي للتعديل',
       'تم نقل المدير لشاشة التعديل الشامل مع الاحتفاظ بنفس التاريخ القديم لترحيل التعديلات'
     );
+  };
+
+  // Manager Save Edit & Resettle with Exact Original Date
+  const handleSaveManagerEditAndResettle = (updatedSheet: DailySheet) => {
+    const finalSheet: DailySheet = {
+      ...updatedSheet,
+      date: managerEditingDate || updatedSheet.date, // Preserve exact original date
+      status: 'settled',
+      updatedAt: new Date().toLocaleTimeString('ar-SA'),
+    };
+
+    const nextSheets = dailySheets.map((s) => (s.id === finalSheet.id || s.date === finalSheet.date ? finalSheet : s));
+    setDailySheets(nextSheets);
+    recalculateAllBalances(nextSheets, vouchers);
+
+    logAudit(
+      'حفظ التعديل الشامل وإعادة الترحيل بنفس التاريخ',
+      `كشف ${finalSheet.dayName} (${finalSheet.date})`,
+      'تعديل مدير',
+      'مرحل بنفس التاريخ القديم ✅',
+      `تم تحديث الحسابات والأرصدة بأثر رجعي دقيق بنفس تاريخ اليوم الأصلي (${finalSheet.date}) دون تكرار الفواتير.`
+    );
+
+    setManagerEditingDate(null);
+    setActivePage('reports');
+    alert(`✅ تم حفظ التعديل الشامل وإعادة ترحيل كشف ${finalSheet.dayName} (${finalSheet.date}) بنجاح بنفس تاريخه القديم وتحديث كافة أرصدة البقالات والموردين بدقة!`);
   };
 
   // Add Voucher (Receipt or Payment)
@@ -475,6 +618,13 @@ export default function App() {
                     : it
                 )
               );
+            }}
+            onSettleSheet={handleSettleWorkerSheet}
+            isManagerEditMode={Boolean(managerEditingDate && currentRole === 'admin')}
+            onSaveManagerEditAndResettle={handleSaveManagerEditAndResettle}
+            onBackToReports={() => {
+              setManagerEditingDate(null);
+              setActivePage('reports');
             }}
           />
         )}
