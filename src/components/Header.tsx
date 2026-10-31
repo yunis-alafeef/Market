@@ -205,21 +205,7 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             )}
 
-            {/* Quick Action Button - Hidden for Worker and removed yellow button */}
-            {currentUser?.role === 'admin' && (
-              <button
-                type="button"
-                onClick={onOpenNewVoucher}
-                className="hidden items-center gap-1.5 px-4 py-2 text-xs sm:text-sm font-black rounded-2xl transition-all shadow-md cursor-pointer whitespace-nowrap shrink-0 active:scale-95"
-                style={{
-                  backgroundColor: 'var(--theme-accent)',
-                  color: 'var(--theme-primary)',
-                }}
-              >
-                <PlusCircle className="w-4 h-4" />
-                <span>سند مالي</span>
-              </button>
-            )}
+            {/* Quick Action Button - Removed as requested */}
           </div>
         </div>
 

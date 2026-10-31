@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Grocery, DailySheet, Voucher, SystemSettings } from '../types';
 import {
   Store,
@@ -10,6 +10,7 @@ import {
   Package,
   Calendar,
   Lock,
+  Search,
 } from 'lucide-react';
 
 interface GroceryPortalViewProps {
@@ -93,14 +94,17 @@ export const GroceryPortalView: React.FC<GroceryPortalViewProps> = ({
     });
 
     sheets.forEach((sheet) => {
-      const items = sheet.rows.filter((r) => (r.quantities[selectedGrocery.id] || 0) > 0);
-      const sumAmount = items.reduce(
-        (sum, r) => sum + (r.quantities[selectedGrocery.id] || 0) * r.salePrice,
-        0
-      );
+      if (sheet.status !== 'settled') return;
+      const items = sheet.rows.filter((r) => (Number(r.quantities[selectedGrocery.id]) || 0) > 0);
+      const sumAmount = Math.round(
+        items.reduce(
+          (sum, r) => sum + Math.round((Number(r.quantities[selectedGrocery.id]) || 0) * (Number(r.salePrice) || 0) * 100) / 100,
+          0
+        ) * 100
+      ) / 100;
 
       if (sumAmount > 0) {
-        running += sumAmount;
+        running = Math.round((running + sumAmount) * 100) / 100;
         rows.push({
           date: sheet.date,
           description: `فاتورة خضروات كشف ${sheet.dayName} (${items.length} أصناف)`,
@@ -115,12 +119,12 @@ export const GroceryPortalView: React.FC<GroceryPortalViewProps> = ({
       (v) => v.partyId === selectedGrocery.id && v.type === 'receipt'
     );
     gVouchers.forEach((v) => {
-      running -= v.amount;
+      running = Math.round((running - (Number(v.amount) || 0)) * 100) / 100;
       rows.push({
         date: v.date,
         description: `سند سداد رقم ${v.voucherNumber} (${v.paymentMethod === 'cash' ? 'نقداً' : 'تحويل'})`,
         debit: 0,
-        credit: v.amount,
+        credit: Number(v.amount) || 0,
         balance: running,
       });
     });
@@ -129,6 +133,37 @@ export const GroceryPortalView: React.FC<GroceryPortalViewProps> = ({
   };
 
   const statementRows = getStatementRows();
+
+  // Date Filter State for Grocery Statement (Requirement 5)
+  const [statementStartDate, setStatementStartDate] = useState<string>('');
+  const [statementEndDate, setStatementEndDate] = useState<string>('');
+  const [appliedStatementFilter, setAppliedStatementFilter] = useState<{ start: string; end: string } | null>(null);
+
+  const handleApplyStatementFilter = () => {
+    if (!statementStartDate && !statementEndDate) {
+      setAppliedStatementFilter(null);
+      return;
+    }
+    setAppliedStatementFilter({
+      start: statementStartDate,
+      end: statementEndDate,
+    });
+  };
+
+  const handleClearStatementFilter = () => {
+    setStatementStartDate('');
+    setStatementEndDate('');
+    setAppliedStatementFilter(null);
+  };
+
+  const displayedStatementRows = useMemo(() => {
+    if (!appliedStatementFilter) return statementRows;
+    return statementRows.filter((row) => {
+      if (appliedStatementFilter.start && row.date < appliedStatementFilter.start) return false;
+      if (appliedStatementFilter.end && row.date > appliedStatementFilter.end) return false;
+      return true;
+    });
+  }, [statementRows, appliedStatementFilter]);
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-16">
@@ -257,7 +292,7 @@ export const GroceryPortalView: React.FC<GroceryPortalViewProps> = ({
                 } else {
                   onOpenPrintModal('statement', {
                     grocery: selectedGrocery,
-                    statementRows,
+                    statementRows: displayedStatementRows,
                   });
                 }
               }}
@@ -350,6 +385,58 @@ export const GroceryPortalView: React.FC<GroceryPortalViewProps> = ({
         {/* TAB 2: DETAILED STATEMENT (كشف الحساب) */}
         {activeTab === 'statement' && (
           <div className="p-4 sm:p-6 space-y-4">
+            {/* Date Range Filter Strip (Requirement 5) */}
+            <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-2 text-xs">
+                  <Calendar className="w-4 h-4 text-slate-500" />
+                  <label className="font-bold text-slate-700">من تاريخ:</label>
+                  <input
+                    type="date"
+                    value={statementStartDate}
+                    onChange={(e) => setStatementStartDate(e.target.value)}
+                    className="bg-white border border-slate-300 rounded-lg px-2.5 py-1 font-mono text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-600"
+                  />
+                </div>
+
+                <div className="flex items-center gap-2 text-xs">
+                  <Calendar className="w-4 h-4 text-slate-500" />
+                  <label className="font-bold text-slate-700">إلى تاريخ:</label>
+                  <input
+                    type="date"
+                    value={statementEndDate}
+                    onChange={(e) => setStatementEndDate(e.target.value)}
+                    className="bg-white border border-slate-300 rounded-lg px-2.5 py-1 font-mono text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-600"
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleApplyStatementFilter}
+                  className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-colors cursor-pointer shadow-xs active:scale-95"
+                >
+                  <Search className="w-3.5 h-3.5" />
+                  <span>🔍 عرض الكشف</span>
+                </button>
+
+                {appliedStatementFilter && (
+                  <button
+                    type="button"
+                    onClick={handleClearStatementFilter}
+                    className="text-xs text-rose-600 hover:text-rose-800 font-bold px-2 py-1 rounded-lg hover:bg-rose-50 cursor-pointer"
+                  >
+                    إلغاء الفلترة
+                  </button>
+                )}
+              </div>
+
+              {appliedStatementFilter && (
+                <div className="text-xs font-bold text-blue-900 bg-blue-100 px-3 py-1 rounded-xl">
+                  عرض {displayedStatementRows.length} حركة بين {appliedStatementFilter.start || 'البداية'} و {appliedStatementFilter.end || 'الآن'}
+                </div>
+              )}
+            </div>
+
             <div className="overflow-x-auto scrollbar-thin">
               <table className="w-full text-right border-collapse text-xs sm:text-sm">
                 <thead>
@@ -362,7 +449,7 @@ export const GroceryPortalView: React.FC<GroceryPortalViewProps> = ({
                   </tr>
                 </thead>
                 <tbody>
-                  {statementRows.map((row, idx) => (
+                  {displayedStatementRows.map((row, idx) => (
                     <tr
                       key={idx}
                       className={`border-b border-slate-200 ${

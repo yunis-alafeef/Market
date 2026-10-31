@@ -52,6 +52,24 @@ export const AdminReportsView: React.FC<AdminReportsViewProps> = ({
   const [selectedDate, setSelectedDate] = useState<string>(sortedSheets[0]?.date || '');
   const [filterQuery, setFilterQuery] = useState<string>('');
 
+  // Search single day by date
+  const [searchDayDate, setSearchDayDate] = useState<string>('');
+  const [searchDayNotice, setSearchDayNotice] = useState<string>('');
+
+  const handleSearchDay = () => {
+    if (!searchDayDate) {
+      setSearchDayNotice('يرجى اختيار تاريخ للبحث');
+      return;
+    }
+    const found = dailySheets.find((s) => s.date === searchDayDate);
+    if (found) {
+      setSelectedDate(found.date);
+      setSearchDayNotice(`✅ تم إظهار كشف ${found.dayName} (${found.date}) بنجاح`);
+    } else {
+      setSearchDayNotice(`⚠️ لا يوجد كشف مسجل بتاريخ ${searchDayDate}`);
+    }
+  };
+
   // Period filtering state
   const [periodPreset, setPeriodPreset] = useState<PeriodPreset>('all');
   const [startDate, setStartDate] = useState<string>('');
@@ -254,14 +272,43 @@ export const AdminReportsView: React.FC<AdminReportsViewProps> = ({
           {currentSheet && (
             <button
               onClick={() => onEditDayComprehensive(currentSheet)}
-              className="flex items-center gap-2 px-4 py-2.5 text-xs sm:text-sm font-bold text-white bg-[#0c2461] hover:bg-[#1e3799] rounded-xl transition-all shadow-xs cursor-pointer active:scale-95"
+              className="flex items-center gap-2 px-4 py-2.5 text-xs sm:text-sm font-bold text-white bg-purple-700 hover:bg-purple-800 rounded-xl transition-all shadow-xs cursor-pointer active:scale-95"
               title="تعديل هذا اليوم في شاشة الكشف اليومي مع الاحتفاظ بنفس التاريخ"
             >
               <Edit3 className="w-4 h-4 text-[#f6b93b]" />
-              <span>تعديل يوم ({currentSheet.dayName})</span>
+              <span>تعديل اليوم/الكشف ({currentSheet.dayName})</span>
             </button>
           )}
         </div>
+      </div>
+
+      {/* Specific Day Search Bar - Requirement 4 */}
+      <div className="bg-gradient-to-r from-purple-50 via-indigo-50 to-purple-100 rounded-2xl p-4 border border-purple-200 shadow-xs flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="text-xs sm:text-sm font-black text-purple-950 flex items-center gap-1.5">
+            <span>📅</span>
+            <span>ابحث عن تقرير يوم محدد بالتاريخ:</span>
+          </span>
+          <input
+            type="date"
+            value={searchDayDate}
+            onChange={(e) => setSearchDayDate(e.target.value)}
+            className="bg-white border-2 border-purple-300 focus:border-purple-600 rounded-xl px-3 py-1.5 text-xs sm:text-sm font-bold text-slate-800 focus:outline-none shadow-xs"
+          />
+          <button
+            type="button"
+            onClick={handleSearchDay}
+            className="flex items-center gap-1.5 px-4 py-2 text-xs sm:text-sm font-black text-white bg-purple-700 hover:bg-purple-800 rounded-xl transition-all shadow-md cursor-pointer active:scale-95"
+          >
+            <span>🔍 إظهار اليوم وتقريره</span>
+          </button>
+        </div>
+
+        {searchDayNotice && (
+          <span className="text-xs font-bold text-purple-800 bg-purple-200/60 px-3 py-1 rounded-lg">
+            {searchDayNotice}
+          </span>
+        )}
       </div>
 
       {/* Period Filter Panel: Quick Filters & Date Pickers */}
@@ -526,11 +573,11 @@ export const AdminReportsView: React.FC<AdminReportsViewProps> = ({
             <div className="flex items-center gap-2">
               <button
                 onClick={() => onEditDayComprehensive(currentSheet)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-[#0c2461] hover:bg-[#1e3799] rounded-xl transition-all cursor-pointer"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-purple-700 hover:bg-purple-800 rounded-xl transition-all cursor-pointer shadow-xs"
                 title="تعديل هذا اليوم في كشف اليومية مع الاحتفاظ بنفس التاريخ القديم"
               >
                 <Edit3 className="w-3.5 h-3.5 text-amber-300" />
-                <span>تعديل اليومية</span>
+                <span>تعديل اليوم/الكشف</span>
               </button>
 
               <button

@@ -87,9 +87,9 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
       const nextVal = Math.max(0, Math.round((current + delta) * 100) / 100);
 
       const newQuantities = { ...row.quantities, [groceryId]: nextVal };
-      const totalQty = Object.values(newQuantities).reduce((sum, q) => sum + (Number(q) || 0), 0);
-      const totalCost = totalQty * row.costPrice;
-      const totalSale = totalQty * row.salePrice;
+      const totalQty = Math.round(Object.values(newQuantities).reduce((sum, q) => sum + (Number(q) || 0), 0) * 100) / 100;
+      const totalCost = Math.round(totalQty * (Number(row.costPrice) || 0) * 100) / 100;
+      const totalSale = Math.round(totalQty * (Number(row.salePrice) || 0) * 100) / 100;
 
       return {
         ...row,
@@ -97,7 +97,7 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
         totalQuantity: totalQty,
         totalCost,
         totalSale,
-        profit: totalSale - totalCost,
+        profit: Math.round((totalSale - totalCost) * 100) / 100,
       };
     });
 
@@ -112,12 +112,12 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
       const current = row.quantities[groceryId] || 0;
       const nextVal = isDelta
         ? Math.max(0, Math.round((current + val) * 100) / 100)
-        : Math.max(0, val);
+        : Math.max(0, Math.round(val * 100) / 100);
 
       const newQuantities = { ...row.quantities, [groceryId]: nextVal };
-      const totalQty = Object.values(newQuantities).reduce((sum, q) => sum + (Number(q) || 0), 0);
-      const totalCost = totalQty * row.costPrice;
-      const totalSale = totalQty * row.salePrice;
+      const totalQty = Math.round(Object.values(newQuantities).reduce((sum, q) => sum + (Number(q) || 0), 0) * 100) / 100;
+      const totalCost = Math.round(totalQty * (Number(row.costPrice) || 0) * 100) / 100;
+      const totalSale = Math.round(totalQty * (Number(row.salePrice) || 0) * 100) / 100;
 
       return {
         ...row,
@@ -125,10 +125,29 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
         totalQuantity: totalQty,
         totalCost,
         totalSale,
-        profit: totalSale - totalCost,
+        profit: Math.round((totalSale - totalCost) * 100) / 100,
       };
     });
 
+    recalculateAndSave(updatedRows);
+  };
+
+  // Row total quantity direct change (for manager / worker surplus adjustment)
+  const handleRowTotalQtyChange = (rowId: string, newTotal: number) => {
+    if (isLocked) return;
+    const targetVal = Math.max(0, Math.round(newTotal * 100) / 100);
+    const updatedRows = sheet.rows.map((row) => {
+      if (row.id !== rowId) return row;
+      const totalCost = Math.round(targetVal * (Number(row.costPrice) || 0) * 100) / 100;
+      const totalSale = Math.round(targetVal * (Number(row.salePrice) || 0) * 100) / 100;
+      return {
+        ...row,
+        totalQuantity: targetVal,
+        totalCost,
+        totalSale,
+        profit: Math.round((totalSale - totalCost) * 100) / 100,
+      };
+    });
     recalculateAndSave(updatedRows);
   };
 
@@ -157,8 +176,8 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
       if (row.id !== rowId) return row;
       const costPrice = field === 'costPrice' ? Math.max(0, val) : row.costPrice;
       const salePrice = field === 'salePrice' ? Math.max(0, val) : row.salePrice;
-      const totalCost = row.totalQuantity * costPrice;
-      const totalSale = row.totalQuantity * salePrice;
+      const totalCost = Math.round((Number(row.totalQuantity) || 0) * costPrice * 100) / 100;
+      const totalSale = Math.round((Number(row.totalQuantity) || 0) * salePrice * 100) / 100;
 
       return {
         ...row,
@@ -166,7 +185,7 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
         salePrice,
         totalCost,
         totalSale,
-        profit: totalSale - totalCost,
+        profit: Math.round((totalSale - totalCost) * 100) / 100,
       };
     });
 
@@ -378,7 +397,7 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
     recalculateAndSave(updatedRows);
   };
 
-  const totalUnits = sheet.rows.reduce((sum, r) => sum + r.totalQuantity, 0);
+  const totalUnits = Math.round(sheet.rows.reduce((sum, r) => sum + (Number(r.totalQuantity) || 0), 0) * 100) / 100;
   const purchasedRowsCount = sheet.rows.filter((r) => r.status === 'purchased').length;
   const uniqueSuppliersCount = new Set(sheet.rows.map((r) => r.supplierId).filter(Boolean)).size;
 
@@ -389,7 +408,7 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
     sheet.rows.forEach((row) => {
       const q = Number(row.quantities[g.id]) || 0;
       totalQty += q;
-      totalAmount += q * (Number(row.salePrice) || 0);
+      totalAmount += Math.round(q * (Number(row.salePrice) || 0) * 100) / 100;
     });
     return {
       groceryId: g.id,
@@ -1029,7 +1048,7 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
                           </select>
                         </td>
 
-                        {/* Cell with Stepper for every grocery */}
+                        {/* Cell with Stepper & Direct Editable Input for every grocery */}
                         {groceries.map((g) => {
                           const qty = row.quantities[g.id] ?? 0;
                           return (
@@ -1040,17 +1059,30 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
                                   disabled={isLocked || qty <= 0}
                                   onClick={() => handleStepQuantity(row.id, g.id, -0.5)}
                                   className="w-6 h-6 rounded bg-slate-100 text-slate-600 hover:bg-slate-200 flex items-center justify-center font-black text-xs cursor-pointer disabled:opacity-30 shrink-0"
+                                  title="إنقاص (-0.5)"
                                 >
                                   -
                                 </button>
-                                <span className="font-mono font-bold text-sm text-slate-900 min-w-[28px] tabular-nums">
-                                  {qty === 0 ? '-' : qty}
-                                </span>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="0.25"
+                                  disabled={isLocked}
+                                  value={qty === 0 ? '' : qty}
+                                  onChange={(e) => {
+                                    const val = parseFloat(e.target.value);
+                                    handleSetQuantity(row.id, g.id, isNaN(val) ? 0 : val, false);
+                                  }}
+                                  placeholder="-"
+                                  className="w-12 text-center font-mono font-bold text-sm text-slate-900 bg-transparent hover:bg-white focus:bg-white focus:ring-1 focus:ring-[#006266] rounded py-0.5 border border-transparent hover:border-slate-300 focus:border-[#006266] tabular-nums"
+                                  title="تعديل الكمية مباشرة (يدعم الأرقام والكسور مثل 0.25، 0.5، 1.5)"
+                                />
                                 <button
                                   type="button"
                                   disabled={isLocked}
                                   onClick={() => handleStepQuantity(row.id, g.id, 0.5)}
                                   className="w-6 h-6 rounded bg-[#006266]/15 text-[#006266] hover:bg-[#006266] hover:text-white flex items-center justify-center font-black text-xs cursor-pointer shrink-0"
+                                  title="زيادة (+0.5)"
                                 >
                                   +
                                 </button>
@@ -1059,8 +1091,21 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
                           );
                         })}
 
-                        <td className="p-2.5 text-center font-mono font-bold text-sm bg-slate-100/60 text-[#006266] tabular-nums whitespace-nowrap">
-                          {row.totalQuantity}
+                        <td className="p-2 text-center bg-slate-100/60 whitespace-nowrap">
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.25"
+                            disabled={isLocked}
+                            value={row.totalQuantity === 0 ? '' : row.totalQuantity}
+                            onChange={(e) => {
+                              const val = parseFloat(e.target.value);
+                              handleRowTotalQtyChange(row.id, isNaN(val) ? 0 : val);
+                            }}
+                            placeholder="0"
+                            className="w-16 text-center font-mono font-bold text-sm text-[#006266] bg-transparent hover:bg-white focus:bg-white focus:ring-1 focus:ring-[#006266] rounded py-0.5 border border-transparent hover:border-slate-300 focus:border-[#006266] tabular-nums"
+                            title="العدد الإجمالي المطلوب للصنف (يمكن زيادته أو تعديله)"
+                          />
                         </td>
 
                         {settings.permissions.workerCanViewPurchaseCost && (
@@ -1255,8 +1300,8 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
         </>
       )}
 
-      {/* TAB 2: MORNING SORT & DISTRIBUTION */}
-      {activeTab === 'morning_sort' && (
+      {/* BOTTOM SECTION: MORNING SORT & DISTRIBUTION (Generated upon clicking Save Night Orders) */}
+      {(sheet.nightOrdersSaved || sheet.morningSortGenerated) && (
         <div className="bg-white rounded-3xl shadow-xs border border-slate-200 overflow-hidden space-y-4 p-4 sm:p-6">
           <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 pb-4">
             <div>
@@ -1294,14 +1339,14 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
               .filter((g) => selectedSortGrocery === 'all' || selectedSortGrocery === g.id)
               .map((grocery) => {
                 const groceryItems = sheet.rows.filter((r) => (r.quantities[grocery.id] || 0) > 0);
-                const groceryTotalQty = groceryItems.reduce(
-                  (sum, r) => sum + (r.quantities[grocery.id] || 0),
+                const groceryTotalQty = Math.round(groceryItems.reduce(
+                  (sum, r) => sum + (Number(r.quantities[grocery.id]) || 0),
                   0
-                );
-                const groceryTotalAmount = groceryItems.reduce(
-                  (sum, r) => sum + (r.quantities[grocery.id] || 0) * r.salePrice,
+                ) * 100) / 100;
+                const groceryTotalAmount = Math.round(groceryItems.reduce(
+                  (sum, r) => sum + Math.round((Number(r.quantities[grocery.id]) || 0) * (Number(r.salePrice) || 0) * 100) / 100,
                   0
-                );
+                ) * 100) / 100;
 
                 return (
                   <div
@@ -1371,7 +1416,7 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
                                       {r.salePrice}
                                     </td>
                                     <td className="py-2 text-center font-mono font-bold text-[#0c2461] tabular-nums">
-                                      {(q * r.salePrice).toLocaleString()}
+                                      {(Math.round(q * (Number(r.salePrice) || 0) * 100) / 100).toLocaleString()}
                                     </td>
                                     <td className="py-2 text-center">
                                       <button

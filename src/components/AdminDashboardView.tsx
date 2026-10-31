@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { DailySheet, Grocery, Supplier, Voucher, SystemSettings } from '../types';
 import {
   DollarSign,
@@ -12,6 +12,8 @@ import {
   ArrowUpRight,
   Filter,
   CheckCircle,
+  Calendar,
+  Search,
 } from 'lucide-react';
 
 interface AdminDashboardViewProps {
@@ -91,16 +93,19 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       balance: runningBalance,
     });
 
-    // Add daily purchases from sheets
+    // Add daily purchases from settled sheets
     sheets.forEach((sheet) => {
-      const items = sheet.rows.filter((r) => (r.quantities[groceryId] || 0) > 0);
-      const totalAmount = items.reduce(
-        (sum, r) => sum + (r.quantities[groceryId] || 0) * r.salePrice,
-        0
-      );
+      if (sheet.status !== 'settled') return;
+      const items = sheet.rows.filter((r) => (Number(r.quantities[groceryId]) || 0) > 0);
+      const totalAmount = Math.round(
+        items.reduce(
+          (sum, r) => sum + Math.round((Number(r.quantities[groceryId]) || 0) * (Number(r.salePrice) || 0) * 100) / 100,
+          0
+        ) * 100
+      ) / 100;
 
       if (totalAmount > 0) {
-        runningBalance += totalAmount;
+        runningBalance = Math.round((runningBalance + totalAmount) * 100) / 100;
         rows.push({
           date: sheet.date,
           description: `مسحوبات خضروات كشف ${sheet.dayName} (${items.length} أصناف)`,
@@ -116,12 +121,12 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       (v) => v.partyId === groceryId && v.type === 'receipt'
     );
     groceryVouchers.forEach((v) => {
-      runningBalance -= v.amount;
+      runningBalance = Math.round((runningBalance - (Number(v.amount) || 0)) * 100) / 100;
       rows.push({
         date: v.date,
         description: `سند قبض رقم ${v.voucherNumber} (${v.notes}) - ${v.paymentMethod === 'cash' ? 'نقداً' : 'تحويل'}`,
         debit: 0,
-        credit: v.amount,
+        credit: Number(v.amount) || 0,
         balance: runningBalance,
       });
     });
@@ -151,13 +156,16 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       balance: runningBalance,
     });
 
-    // Add purchases from sheets
+    // Add purchases from settled sheets
     sheets.forEach((sheet) => {
+      if (sheet.status !== 'settled') return;
       const items = sheet.rows.filter((r) => r.supplierId === supplierId);
-      const totalCost = items.reduce((sum, r) => sum + r.totalCost, 0);
+      const totalCost = Math.round(
+        items.reduce((sum, r) => sum + (Number(r.totalCost) || 0), 0) * 100
+      ) / 100;
 
       if (totalCost > 0) {
-        runningBalance += totalCost;
+        runningBalance = Math.round((runningBalance + totalCost) * 100) / 100;
         rows.push({
           date: sheet.date,
           description: `توريد خضار كشف ${sheet.dayName} (${items.map((i) => i.itemName).join('، ')})`,
@@ -173,12 +181,12 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       (v) => v.partyId === supplierId && v.type === 'payment'
     );
     supplierVouchers.forEach((v) => {
-      runningBalance -= v.amount;
+      runningBalance = Math.round((runningBalance - (Number(v.amount) || 0)) * 100) / 100;
       rows.push({
         date: v.date,
         description: `سند صرف رقم ${v.voucherNumber} (${v.notes})`,
         debit: 0,
-        credit: v.amount,
+        credit: Number(v.amount) || 0,
         balance: runningBalance,
       });
     });
@@ -191,6 +199,46 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
 
   const currentGroceryStatement = selectedGrocery ? getGroceryStatement(selectedGrocery.id) : [];
   const currentSupplierStatement = selectedSupplier ? getSupplierStatement(selectedSupplier.id) : [];
+
+  // Date Filter State for Statements (Requirement 5)
+  const [statementStartDate, setStatementStartDate] = useState<string>('');
+  const [statementEndDate, setStatementEndDate] = useState<string>('');
+  const [appliedStatementFilter, setAppliedStatementFilter] = useState<{ start: string; end: string } | null>(null);
+
+  const handleApplyStatementFilter = () => {
+    if (!statementStartDate && !statementEndDate) {
+      setAppliedStatementFilter(null);
+      return;
+    }
+    setAppliedStatementFilter({
+      start: statementStartDate,
+      end: statementEndDate,
+    });
+  };
+
+  const handleClearStatementFilter = () => {
+    setStatementStartDate('');
+    setStatementEndDate('');
+    setAppliedStatementFilter(null);
+  };
+
+  const displayedGroceryStatement = useMemo(() => {
+    if (!appliedStatementFilter) return currentGroceryStatement;
+    return currentGroceryStatement.filter((row) => {
+      if (appliedStatementFilter.start && row.date < appliedStatementFilter.start) return false;
+      if (appliedStatementFilter.end && row.date > appliedStatementFilter.end) return false;
+      return true;
+    });
+  }, [currentGroceryStatement, appliedStatementFilter]);
+
+  const displayedSupplierStatement = useMemo(() => {
+    if (!appliedStatementFilter) return currentSupplierStatement;
+    return currentSupplierStatement.filter((row) => {
+      if (appliedStatementFilter.start && row.date < appliedStatementFilter.start) return false;
+      if (appliedStatementFilter.end && row.date > appliedStatementFilter.end) return false;
+      return true;
+    });
+  }, [currentSupplierStatement, appliedStatementFilter]);
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-16">
@@ -364,7 +412,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                     onClick={() =>
                       onOpenPrintModal('statement', {
                         grocery: selectedGrocery,
-                        statementRows: currentGroceryStatement,
+                        statementRows: displayedGroceryStatement,
                       })
                     }
                     className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-xl hover:bg-slate-50 transition-colors cursor-pointer"
@@ -372,6 +420,58 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                     <Printer className="w-3.5 h-3.5 text-slate-600" />
                     طباعة كشف الحساب
                   </button>
+                </div>
+              )}
+            </div>
+
+            {/* Date Range Filter Strip (Requirement 5) */}
+            <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-2 text-xs">
+                  <Calendar className="w-4 h-4 text-slate-500" />
+                  <label className="font-bold text-slate-700">من تاريخ:</label>
+                  <input
+                    type="date"
+                    value={statementStartDate}
+                    onChange={(e) => setStatementStartDate(e.target.value)}
+                    className="bg-white border border-slate-300 rounded-lg px-2.5 py-1 font-mono text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-600"
+                  />
+                </div>
+
+                <div className="flex items-center gap-2 text-xs">
+                  <Calendar className="w-4 h-4 text-slate-500" />
+                  <label className="font-bold text-slate-700">إلى تاريخ:</label>
+                  <input
+                    type="date"
+                    value={statementEndDate}
+                    onChange={(e) => setStatementEndDate(e.target.value)}
+                    className="bg-white border border-slate-300 rounded-lg px-2.5 py-1 font-mono text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-600"
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleApplyStatementFilter}
+                  className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-colors cursor-pointer shadow-xs active:scale-95"
+                >
+                  <Search className="w-3.5 h-3.5" />
+                  <span>🔍 عرض الكشف</span>
+                </button>
+
+                {appliedStatementFilter && (
+                  <button
+                    type="button"
+                    onClick={handleClearStatementFilter}
+                    className="text-xs text-rose-600 hover:text-rose-800 font-bold px-2 py-1 rounded-lg hover:bg-rose-50 cursor-pointer"
+                  >
+                    إلغاء الفلترة
+                  </button>
+                )}
+              </div>
+
+              {appliedStatementFilter && (
+                <div className="text-xs font-bold text-blue-900 bg-blue-100 px-3 py-1 rounded-xl">
+                  عرض {displayedGroceryStatement.length} حركة بين {appliedStatementFilter.start || 'البداية'} و {appliedStatementFilter.end || 'الآن'}
                 </div>
               )}
             </div>
@@ -389,7 +489,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                   </tr>
                 </thead>
                 <tbody>
-                  {currentGroceryStatement.map((row, idx) => (
+                  {displayedGroceryStatement.map((row, idx) => (
                     <tr
                       key={idx}
                       className={`border-b border-slate-200 ${
@@ -448,7 +548,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                     onClick={() =>
                       onOpenPrintModal('statement', {
                         supplier: selectedSupplier,
-                        statementRows: currentSupplierStatement,
+                        statementRows: displayedSupplierStatement,
                       })
                     }
                     className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-xl hover:bg-slate-50 transition-colors cursor-pointer"
@@ -456,6 +556,58 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                     <Printer className="w-3.5 h-3.5 text-slate-600" />
                     طباعة كشف الحساب
                   </button>
+                </div>
+              )}
+            </div>
+
+            {/* Date Range Filter Strip (Requirement 5) */}
+            <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-2 text-xs">
+                  <Calendar className="w-4 h-4 text-slate-500" />
+                  <label className="font-bold text-slate-700">من تاريخ:</label>
+                  <input
+                    type="date"
+                    value={statementStartDate}
+                    onChange={(e) => setStatementStartDate(e.target.value)}
+                    className="bg-white border border-slate-300 rounded-lg px-2.5 py-1 font-mono text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-600"
+                  />
+                </div>
+
+                <div className="flex items-center gap-2 text-xs">
+                  <Calendar className="w-4 h-4 text-slate-500" />
+                  <label className="font-bold text-slate-700">إلى تاريخ:</label>
+                  <input
+                    type="date"
+                    value={statementEndDate}
+                    onChange={(e) => setStatementEndDate(e.target.value)}
+                    className="bg-white border border-slate-300 rounded-lg px-2.5 py-1 font-mono text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-600"
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleApplyStatementFilter}
+                  className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-colors cursor-pointer shadow-xs active:scale-95"
+                >
+                  <Search className="w-3.5 h-3.5" />
+                  <span>🔍 عرض الكشف</span>
+                </button>
+
+                {appliedStatementFilter && (
+                  <button
+                    type="button"
+                    onClick={handleClearStatementFilter}
+                    className="text-xs text-rose-600 hover:text-rose-800 font-bold px-2 py-1 rounded-lg hover:bg-rose-50 cursor-pointer"
+                  >
+                    إلغاء الفلترة
+                  </button>
+                )}
+              </div>
+
+              {appliedStatementFilter && (
+                <div className="text-xs font-bold text-blue-900 bg-blue-100 px-3 py-1 rounded-xl">
+                  عرض {displayedSupplierStatement.length} حركة بين {appliedStatementFilter.start || 'البداية'} و {appliedStatementFilter.end || 'الآن'}
                 </div>
               )}
             </div>
@@ -473,7 +625,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                   </tr>
                 </thead>
                 <tbody>
-                  {currentSupplierStatement.map((row, idx) => (
+                  {displayedSupplierStatement.map((row, idx) => (
                     <tr
                       key={idx}
                       className={`border-b border-slate-200 ${
