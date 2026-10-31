@@ -213,11 +213,16 @@ export function loadFromStorage<T>(key: string, defaultValue: T): T {
 // Nothing is persisted in the browser; memCache is just the in-memory copy.
 // ---------------------------------------------------------------------------
 const SYNC_KEYS: string[] = Object.values(STORAGE_KEYS);
+// Collections stored one database row per record (so concurrent edits never overwrite each other)
+const RECORD_KEYS: string[] = SYNC_KEYS.filter((k) => k !== STORAGE_KEYS.SETTINGS);
+// Collections displayed newest-first
+const NEWEST_FIRST: string[] = [STORAGE_KEYS.VOUCHERS, STORAGE_KEYS.AUDIT_LOGS, STORAGE_KEYS.DAILY_SHEETS];
 const memCache: Record<string, any> = {};
-const lastSynced: Record<string, string> = {};
+const lastSynced: Record<string, string> = {}; // settings (single object)
+const snapshot: Record<string, Record<string, string>> = {}; // id -> canonical json as stored in the cloud
 const pushTimers: Record<string, ReturnType<typeof setTimeout>> = {};
+const pushing: Record<string, boolean> = {};
 let cloudReady = false;
-
 export interface SyncStatus {
   loaded: boolean;
   error: string | null;
@@ -260,26 +265,81 @@ function canon(v: unknown): string {
   return JSON.stringify(sort(v));
 }
 
-function schedulePush(key: string): void {
-  if (!cloudReady || !SYNC_KEYS.includes(key)) return;
-  clearTimeout(pushTimers[key]);
-  pushTimers[key] = setTimeout(async () => {
-    if (!(key in memCache)) return;
-    const c = canon(memCache[key]);
-    if (c === lastSynced[key]) return;
-    try {
+function toMap(key: string): Record<string, string> {
+  const map: Record<string, string> = {};
+  const arr = Array.isArray(memCache[key]) ? memCache[key] : [];
+  for (const e of arr) if (e && e.id != null) map[String(e.id)] = canon(e);
+  return map;
+}
+
+function mapsEqual(a: Record<string, string>, b: Record<string, string>): boolean {
+  const ka = Object.keys(a);
+  if (ka.length !== Object.keys(b).length) return false;
+  return ka.every((k) => a[k] === b[k]);
+}
+
+function isDirty(key: string): boolean {
+  if (!(key in memCache)) return false;
+  if (RECORD_KEYS.includes(key)) return !mapsEqual(toMap(key), snapshot[key] || {});
+  return canon(memCache[key]) !== lastSynced[key];
+}
+
+function chunk<T>(arr: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out;
+}
+
+async function pushNow(key: string): Promise<void> {
+  if (!cloudReady || !isDirty(key)) return;
+  if (pushing[key]) {
+    schedulePush(key);
+    return;
+  }
+  pushing[key] = true;
+  try {
+    if (RECORD_KEYS.includes(key)) {
+      const local = toMap(key);
+      const snap = snapshot[key] || {};
+      let changedRecords = (memCache[key] as any[]).filter(
+        (e) => e && e.id != null && snap[String(e.id)] !== local[String(e.id)]
+      );
+      if (NEWEST_FIRST.includes(key)) changedRecords = [...changedRecords].reverse();
+      const now = new Date().toISOString();
+      for (const part of chunk(changedRecords, 200)) {
+        const { error } = await supabase.from('app_records').upsert(
+          part.map((e) => ({ collection: key, id: String(e.id), data: e, updated_at: now })),
+          { onConflict: 'collection,id' }
+        );
+        if (error) throw new Error(error.message);
+      }
+      const removed = Object.keys(snap).filter((id) => !(id in local));
+      for (const part of chunk(removed, 100)) {
+        const { error } = await supabase.from('app_records').delete().eq('collection', key).in('id', part);
+        if (error) throw new Error(error.message);
+      }
+      snapshot[key] = local;
+    } else {
+      const c = canon(memCache[key]);
       const { error } = await supabase
         .from('app_kv')
         .upsert({ key, value: memCache[key], updated_at: new Date().toISOString() });
-      if (error) {
-        setSyncStatus({ error: describeError(error.message) });
-      } else {
-        lastSynced[key] = c;
-      }
-    } catch (e: any) {
-      setSyncStatus({ error: describeError(e?.message || String(e)) });
+      if (error) throw new Error(error.message);
+      lastSynced[key] = c;
     }
-  }, 150);
+    if (getSyncStatus().error) setSyncStatus({ error: null });
+    if (isDirty(key)) schedulePush(key); // changed while saving
+  } catch (e: any) {
+    setSyncStatus({ error: describeError(e?.message || String(e)) });
+  } finally {
+    pushing[key] = false;
+  }
+}
+
+function schedulePush(key: string): void {
+  if (!cloudReady || !SYNC_KEYS.includes(key)) return;
+  clearTimeout(pushTimers[key]);
+  pushTimers[key] = setTimeout(() => void pushNow(key), 150);
 }
 
 export function saveToStorage<T>(key: string, value: T): void {
@@ -287,6 +347,20 @@ export function saveToStorage<T>(key: string, value: T): void {
   schedulePush(key);
 }
 
+async function fetchAllRecords(): Promise<any[]> {
+  const out: any[] = [];
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await supabase
+      .from('app_records')
+      .select('collection,id,data,seq')
+      .order('seq', { ascending: true })
+      .range(from, from + 999);
+    if (error) throw new Error(error.message);
+    out.push(...(data || []));
+    if (!data || data.length < 1000) break;
+  }
+  return out;
+}
 export const StorageService = {
   getGroceries(): Grocery[] {
     return loadFromStorage(STORAGE_KEYS.GROCERIES, INITIAL_GROCERIES);
@@ -399,30 +473,64 @@ export const StorageService = {
   async syncFromCloud(): Promise<string[]> {
     const changed: string[] = [];
     try {
-      const { data, error } = await supabase.from('app_kv').select('key,value');
-      if (error) {
-        setSyncStatus({ error: describeError(error.message) });
-        return changed;
-      }
+      const rows = await fetchAllRecords();
+      const { data: kv, error: kvErr } = await supabase.from('app_kv').select('key,value');
+      if (kvErr) throw new Error(kvErr.message);
+      const kvMap: Record<string, any> = {};
+      (kv || []).forEach((r: any) => (kvMap[r.key] = r.value));
+
       const firstSync = !cloudReady;
-      for (const row of data || []) {
-        const key = row.key as string;
-        if (!SYNC_KEYS.includes(key)) continue;
-        const cloudC = canon(row.value);
-        const localC = key in memCache ? canon(memCache[key]) : null;
-        const noUnpushedLocal = localC === lastSynced[key];
-        if (cloudC === localC) {
-          lastSynced[key] = cloudC;
-        } else if (firstSync || noUnpushedLocal) {
-          memCache[key] = row.value;
-          lastSynced[key] = cloudC;
+      const byKey: Record<string, any[]> = {};
+      rows.forEach((r) => (byKey[r.collection] ||= []).push(r));
+
+      for (const key of RECORD_KEYS) {
+        const cr = byKey[key] || [];
+        const cloudMap: Record<string, string> = {};
+        cr.forEach((r) => (cloudMap[String(r.id)] = canon(r.data)));
+        const localMap = toMap(key);
+        if (mapsEqual(localMap, cloudMap)) {
+          snapshot[key] = cloudMap;
+          continue;
+        }
+        if (cr.length === 0) {
+          // Nothing in cloud yet: migrate legacy array (older app_kv format) or keep local defaults
+          const legacy = kvMap[key];
+          if (firstSync && Array.isArray(legacy) && legacy.length > 0) {
+            memCache[key] = legacy;
+            snapshot[key] = {};
+            changed.push(key);
+          } else if (!firstSync && !isDirty(key)) {
+            memCache[key] = [];
+            snapshot[key] = {};
+            changed.push(key);
+          }
+          continue;
+        }
+        if (firstSync || !isDirty(key)) {
+          const arr = cr.map((r) => r.data);
+          memCache[key] = NEWEST_FIRST.includes(key) ? arr.reverse() : arr;
+          snapshot[key] = cloudMap;
           changed.push(key);
         }
+        // else: local edits not yet saved -> they are pushed below and win
       }
+
+      const sKey = STORAGE_KEYS.SETTINGS;
+      if (kvMap[sKey] !== undefined) {
+        const cloudC = canon(kvMap[sKey]);
+        const localC = sKey in memCache ? canon(memCache[sKey]) : null;
+        if (cloudC === localC) {
+          lastSynced[sKey] = cloudC;
+        } else if (firstSync || localC === lastSynced[sKey]) {
+          memCache[sKey] = kvMap[sKey];
+          lastSynced[sKey] = cloudC;
+          changed.push(sKey);
+        }
+      }
+
       if (firstSync) cloudReady = true;
-      // Retry any local change that has not reached the database yet
       SYNC_KEYS.forEach((k) => {
-        if (k in memCache && canon(memCache[k]) !== lastSynced[k]) schedulePush(k);
+        if (isDirty(k)) schedulePush(k);
       });
       setSyncStatus({ error: null, loaded: true });
     } catch (e: any) {
@@ -434,10 +542,14 @@ export const StorageService = {
   resetAllData(): void {
     SYNC_KEYS.forEach((k) => {
       delete lastSynced[k];
+      delete snapshot[k];
       delete memCache[k];
-      void supabase.from('app_kv').delete().eq('key', k).then(({ error }) => {
-        if (error) setSyncStatus({ error: describeError(error.message) });
-      });
+    });
+    void supabase.from('app_records').delete().in('collection', RECORD_KEYS).then(({ error }) => {
+      if (error) setSyncStatus({ error: describeError(error.message) });
+    });
+    void supabase.from('app_kv').delete().in('key', SYNC_KEYS).then(({ error }) => {
+      if (error) setSyncStatus({ error: describeError(error.message) });
     });
   },
 };
