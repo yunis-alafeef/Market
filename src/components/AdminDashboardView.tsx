@@ -83,19 +83,15 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       balance: number;
     }[] = [];
 
-    // Opening balance
-    let runningBalance = g.balance * 0.4;
-    rows.push({
-      date: '2026-10-20',
-      description: 'رصيد افتتاحي سابق',
-      debit: runningBalance,
-      credit: 0,
-      balance: runningBalance,
-    });
+    // Opening balance starts at 0.00 (no phantom hardcoded opening balance)
+    let runningBalance = 0;
 
     // Add daily purchases from settled sheets
-    sheets.forEach((sheet) => {
-      if (sheet.status !== 'settled') return;
+    const sortedSettled = [...sheets]
+      .filter((s) => s.status === 'settled')
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    sortedSettled.forEach((sheet) => {
       const items = sheet.rows.filter((r) => (Number(r.quantities[groceryId]) || 0) > 0);
       const totalAmount = Math.round(
         items.reduce(
@@ -105,13 +101,12 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       ) / 100;
 
       if (totalAmount > 0) {
-        runningBalance = Math.round((runningBalance + totalAmount) * 100) / 100;
         rows.push({
           date: sheet.date,
           description: `مسحوبات خضروات كشف ${sheet.dayName} (${items.length} أصناف)`,
           debit: totalAmount,
           credit: 0,
-          balance: runningBalance,
+          balance: 0,
         });
       }
     });
@@ -121,17 +116,20 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       (v) => v.partyId === groceryId && v.type === 'receipt'
     );
     groceryVouchers.forEach((v) => {
-      runningBalance = Math.round((runningBalance - (Number(v.amount) || 0)) * 100) / 100;
       rows.push({
         date: v.date,
         description: `سند قبض رقم ${v.voucherNumber} (${v.notes}) - ${v.paymentMethod === 'cash' ? 'نقداً' : 'تحويل'}`,
         debit: 0,
         credit: Number(v.amount) || 0,
-        balance: runningBalance,
+        balance: 0,
       });
     });
 
-    return rows.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    rows.sort((a, b) => a.date.localeCompare(b.date));
+    return rows.map((r) => {
+      runningBalance = Math.round((runningBalance + r.debit - r.credit) * 100) / 100;
+      return { ...r, balance: runningBalance };
+    });
   };
 
   // Generate statement rows for a supplier
@@ -147,31 +145,28 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       balance: number;
     }[] = [];
 
-    let runningBalance = s.balance * 0.5;
-    rows.push({
-      date: '2026-10-20',
-      description: 'رصيد افتتاحي مستحق للمورد',
-      debit: runningBalance,
-      credit: 0,
-      balance: runningBalance,
-    });
+    let runningBalance = 0;
 
     // Add purchases from settled sheets
-    sheets.forEach((sheet) => {
-      if (sheet.status !== 'settled') return;
-      const items = sheet.rows.filter((r) => r.supplierId === supplierId);
+    const sortedSettled = [...sheets]
+      .filter((s) => s.status === 'settled')
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    sortedSettled.forEach((sheet) => {
+      const items = sheet.rows.filter(
+        (r) => r.supplierId === supplierId || (!r.supplierId && r.supplierName === s.name)
+      );
       const totalCost = Math.round(
         items.reduce((sum, r) => sum + (Number(r.totalCost) || 0), 0) * 100
       ) / 100;
 
       if (totalCost > 0) {
-        runningBalance = Math.round((runningBalance + totalCost) * 100) / 100;
         rows.push({
           date: sheet.date,
           description: `توريد خضار كشف ${sheet.dayName} (${items.map((i) => i.itemName).join('، ')})`,
           debit: totalCost,
           credit: 0,
-          balance: runningBalance,
+          balance: 0,
         });
       }
     });
@@ -181,17 +176,20 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       (v) => v.partyId === supplierId && v.type === 'payment'
     );
     supplierVouchers.forEach((v) => {
-      runningBalance = Math.round((runningBalance - (Number(v.amount) || 0)) * 100) / 100;
       rows.push({
         date: v.date,
         description: `سند صرف رقم ${v.voucherNumber} (${v.notes})`,
         debit: 0,
         credit: Number(v.amount) || 0,
-        balance: runningBalance,
+        balance: 0,
       });
     });
 
-    return rows.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    rows.sort((a, b) => a.date.localeCompare(b.date));
+    return rows.map((r) => {
+      runningBalance = Math.round((runningBalance + r.debit - r.credit) * 100) / 100;
+      return { ...r, balance: runningBalance };
+    });
   };
 
   const selectedGrocery = groceries.find((g) => g.id === selectedGroceryId) || groceries[0];

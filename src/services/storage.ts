@@ -143,8 +143,8 @@ export function generateCleanRows(items: VegetableItem[], suppliers: Supplier[],
       itemId: item.id,
       itemName: item.name,
       unit: item.unit,
-      supplierId: supplier.id,
-      supplierName: supplier.name,
+      supplierId: supplier?.id || "",
+      supplierName: supplier?.name || "مورد عام",
       costPrice: item.defaultCostPrice,
       salePrice: item.defaultSalePrice,
       quantities,
@@ -451,7 +451,7 @@ export const StorageService = {
   addAuditLog(log: Omit<AuditLog, 'id' | 'timestamp'>): void {
     const current = this.getAuditLogs();
     const now = new Date();
-    const timeStr = now.toLocaleDateString('en-CA') + ' ' + now.toTimeString().split(' ')[0];
+    const timeStr = getEffectiveMarketDate().actualDateStr + ' ' + now.toTimeString().split(' ')[0];
     const newEntry: AuditLog = {
       ...log,
       id: 'log_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),

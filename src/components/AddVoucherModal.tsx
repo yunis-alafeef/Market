@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+﻿import React, { useState, useEffect } from 'react';
+import { getEffectiveMarketDate } from '../services/storage';
 import { X, Receipt, Check } from 'lucide-react';
 import { Grocery, Supplier, Voucher } from '../types';
 
@@ -29,7 +30,18 @@ export const AddVoucherModal: React.FC<AddVoucherModalProps> = ({
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'transfer' | 'check'>('cash');
   const [referenceNumber, setReferenceNumber] = useState<string>('');
   const [notes, setNotes] = useState<string>('');
-  const [date, setDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState<string>(() => getEffectiveMarketDate().actualDateStr);
+
+  useEffect(() => {
+    if (isOpen) {
+      setType(defaultType);
+      setPartyId(defaultPartyId || (defaultType === 'receipt' ? groceries[0]?.id : suppliers[0]?.id) || '');
+      setDate(getEffectiveMarketDate().actualDateStr);
+      setAmount(0);
+      setReferenceNumber('');
+      setNotes('');
+    }
+  }, [isOpen, defaultType, defaultPartyId, groceries, suppliers]);
 
   if (!isOpen) return null;
 

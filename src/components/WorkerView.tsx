@@ -830,7 +830,7 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
                             onChange={(e) => handleSupplierChange(row.id, e.target.value)}
                             className="bg-transparent font-bold text-slate-800 focus:outline-none text-xs truncate max-w-[200px]"
                           >
-                            {suppliers.map((s) => (
+                            {suppliers.length === 0 && <option value="">مورد عام (أضف مورداً)</option>}`r`n                            {suppliers.map((s) => (
                               <option key={s.id} value={s.id}>
                                 {s.name}
                               </option>
@@ -969,7 +969,7 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
                           <span>تكرار لمورد آخر (+)</span>
                         </button>
 
-                        {sheet.rows.length > 1 && (
+                        {sheet.rows.length >= 1 && (
                           <button
                             type="button"
                             onClick={() => handleDeleteRow(row.id)}
@@ -1058,7 +1058,7 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
                             onChange={(e) => handleSupplierChange(row.id, e.target.value)}
                             className="w-full text-xs p-1.5 bg-white border border-slate-200 rounded-lg focus:outline-none truncate"
                           >
-                            {suppliers.map((s) => (
+                            {suppliers.length === 0 && <option value="">مورد عام (أضف مورداً)</option>}`r`n                            {suppliers.map((s) => (
                               <option key={s.id} value={s.id}>
                                 {s.name}
                               </option>

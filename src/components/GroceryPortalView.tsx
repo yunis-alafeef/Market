@@ -84,17 +84,13 @@ export const GroceryPortalView: React.FC<GroceryPortalViewProps> = ({
       balance: number;
     }[] = [];
 
-    let running = selectedGrocery.balance * 0.4;
-    rows.push({
-      date: '2026-10-20',
-      description: 'رصيد سابق مرحل',
-      debit: running,
-      credit: 0,
-      balance: running,
-    });
+    let running = 0;
 
-    sheets.forEach((sheet) => {
-      if (sheet.status !== 'settled') return;
+    const sortedSettled = [...sheets]
+      .filter((s) => s.status === 'settled')
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    sortedSettled.forEach((sheet) => {
       const items = sheet.rows.filter((r) => (Number(r.quantities[selectedGrocery.id]) || 0) > 0);
       const sumAmount = Math.round(
         items.reduce(
@@ -104,13 +100,12 @@ export const GroceryPortalView: React.FC<GroceryPortalViewProps> = ({
       ) / 100;
 
       if (sumAmount > 0) {
-        running = Math.round((running + sumAmount) * 100) / 100;
         rows.push({
           date: sheet.date,
           description: `فاتورة خضروات كشف ${sheet.dayName} (${items.length} أصناف)`,
           debit: sumAmount,
           credit: 0,
-          balance: running,
+          balance: 0,
         });
       }
     });
@@ -119,17 +114,20 @@ export const GroceryPortalView: React.FC<GroceryPortalViewProps> = ({
       (v) => v.partyId === selectedGrocery.id && v.type === 'receipt'
     );
     gVouchers.forEach((v) => {
-      running = Math.round((running - (Number(v.amount) || 0)) * 100) / 100;
       rows.push({
         date: v.date,
         description: `سند سداد رقم ${v.voucherNumber} (${v.paymentMethod === 'cash' ? 'نقداً' : 'تحويل'})`,
         debit: 0,
         credit: Number(v.amount) || 0,
-        balance: running,
+        balance: 0,
       });
     });
 
-    return rows.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    rows.sort((a, b) => a.date.localeCompare(b.date));
+    return rows.map((r) => {
+      running = Math.round((running + r.debit - r.credit) * 100) / 100;
+      return { ...r, balance: running };
+    });
   };
 
   const statementRows = getStatementRows();

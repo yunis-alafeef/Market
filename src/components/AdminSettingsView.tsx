@@ -46,6 +46,7 @@ interface AdminSettingsViewProps {
   onDeleteGrocery: (id: string) => void;
   onAddSupplier: (supplier: Omit<Supplier, 'id' | 'balance' | 'active'>) => void;
   onUpdateSupplier: (supplier: Supplier) => void;
+  onDeleteSupplier: (id: string) => void;
   onResetData: () => void;
 }
 
@@ -62,6 +63,7 @@ export const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
   onDeleteGrocery,
   onAddSupplier,
   onUpdateSupplier,
+  onDeleteSupplier,
   onResetData,
 }) => {
   // Tabs: 'users' | 'permissions' | 'groceries' | 'suppliers' | 'invoice_header' | 'themes' | 'audit_log' | 'supabase'
@@ -88,6 +90,12 @@ export const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
   const [newGOwner, setNewGOwner] = useState('');
   const [newGLimit, setNewGLimit] = useState(500000);
   const [showAddGBulk, setShowAddGBulk] = useState(false);
+
+  // Form states for new supplier
+  const [newSName, setNewSName] = useState('');
+  const [newSPhone, setNewSPhone] = useState('');
+  const [newSSpecialty, setNewSSpecialty] = useState('');
+  const [showAddSBulk, setShowAddSBulk] = useState(false);
 
   // Form states for header & branding
   const [brandForm, setBrandForm] = useState(settings);
@@ -173,6 +181,21 @@ export const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
     setNewGPhone('');
     setNewGOwner('');
     setShowAddGBulk(false);
+  };
+
+  // Submit New Supplier
+  const handleCreateSupplier = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newSName.trim()) return;
+    onAddSupplier({
+      name: newSName.trim(),
+      phone: newSPhone.trim() || '770000000',
+      specialty: newSSpecialty.trim() || 'خضروات وفواكه عامة',
+    });
+    setNewSName('');
+    setNewSPhone('');
+    setNewSSpecialty('');
+    setShowAddSBulk(false);
   };
 
   // Save Branding Header
@@ -955,7 +978,90 @@ VITE_SUPABASE_ANON_KEY="sb_publishable_DesBAjmOQwAYOtcKggQwFQ__vkAjme5"`}
         {/* TAB 5: SUPPLIERS */}
         {activeTab === 'suppliers' && (
           <div className="p-6 space-y-6">
-            <h3 className="text-base font-bold text-slate-900">إدارة الموردين والمزارع</h3>
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <h3 className="text-base font-bold text-slate-900">إدارة الموردين والمزارع</h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  إضافة أو حذف الموردين المعتمدين لتوريد الخضروات والفواكه، ويتم حفظهم مباشرة في قاعدة البيانات.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowAddSBulk(!showAddSBulk)}
+                className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-[#0c2461] hover:bg-[#1e3799] rounded-xl transition-colors cursor-pointer shadow-sm"
+              >
+                <Plus className="w-4 h-4" />
+                + إضافة مورد جديد
+              </button>
+            </div>
+
+            {showAddSBulk && (
+              <form
+                onSubmit={handleCreateSupplier}
+                className="p-4 bg-slate-50 rounded-xl border border-slate-300 space-y-4"
+              >
+                <div className="text-xs font-bold text-[#0c2461]">
+                  بيانات المورد الجديد:
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">
+                      اسم المورد / المزرعة *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="مثال: مزارع الوادي الأخضر"
+                      value={newSName}
+                      onChange={(e) => setNewSName(e.target.value)}
+                      className="w-full px-3 py-1.5 text-sm bg-white border border-slate-300 rounded-lg focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">
+                      التخصص والمنتجات
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="مثال: طماط، بطاط، بصل"
+                      value={newSSpecialty}
+                      onChange={(e) => setNewSSpecialty(e.target.value)}
+                      className="w-full px-3 py-1.5 text-sm bg-white border border-slate-300 rounded-lg focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">
+                      رقم الهاتف (اليمن)
+                    </label>
+                    <input
+                      type="tel"
+                      placeholder="77xxxxxxx"
+                      value={newSPhone}
+                      onChange={(e) => setNewSPhone(e.target.value)}
+                      className="w-full px-3 py-1.5 text-sm font-mono bg-white border border-slate-300 rounded-lg focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowAddSBulk(false)}
+                    className="px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-200 rounded-lg"
+                  >
+                    إلغاء
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-1.5 text-xs font-bold text-white bg-[#009432] hover:bg-[#007b29] rounded-lg shadow-xs"
+                  >
+                    حفظ وإضافة المورد
+                  </button>
+                </div>
+              </form>
+            )}
+
             <div className="overflow-x-auto scrollbar-thin">
               <table className="w-full text-right border-collapse text-xs sm:text-sm">
                 <thead>
@@ -965,20 +1071,43 @@ VITE_SUPABASE_ANON_KEY="sb_publishable_DesBAjmOQwAYOtcKggQwFQ__vkAjme5"`}
                     <th className="p-3">التخصص والمنتجات</th>
                     <th className="p-3">رقم الهاتف</th>
                     <th className="p-3 text-center">المستحقات له</th>
+                    <th className="p-3 text-center w-20">إجراءات</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {suppliers.map((s, idx) => (
-                    <tr key={s.id} className="border-b border-slate-200 hover:bg-slate-50">
-                      <td className="p-2.5 text-center font-mono text-slate-400">{idx + 1}</td>
-                      <td className="p-2.5 font-bold text-slate-900">{s.name}</td>
-                      <td className="p-2.5 text-slate-600">{s.specialty}</td>
-                      <td className="p-2.5 font-mono text-slate-600">+967 {s.phone}</td>
-                      <td className="p-2.5 text-center font-mono font-bold text-rose-600 tabular-nums">
-                        {s.balance.toLocaleString()} ر.س
+                  {suppliers.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="p-6 text-center text-slate-400">
+                        لا يوجد موردون مضافون حالياً. اضغط على (+ إضافة مورد جديد) لإضافة الموردين.
                       </td>
                     </tr>
-                  ))}
+                  ) : (
+                    suppliers.map((s, idx) => (
+                      <tr key={s.id} className="border-b border-slate-200 hover:bg-slate-50">
+                        <td className="p-2.5 text-center font-mono text-slate-400">{idx + 1}</td>
+                        <td className="p-2.5 font-bold text-slate-900">{s.name}</td>
+                        <td className="p-2.5 text-slate-600">{s.specialty}</td>
+                        <td className="p-2.5 font-mono text-slate-600">+967 {s.phone}</td>
+                        <td className="p-2.5 text-center font-mono font-bold text-rose-600 tabular-nums">
+                          {s.balance.toLocaleString()} ر.س
+                        </td>
+                        <td className="p-2.5 text-center">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (window.confirm(`هل أنت متأكد من حذف المورد (${s.name})؟`)) {
+                                onDeleteSupplier(s.id);
+                              }
+                            }}
+                            className="p-1 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
+                            title="حذف المورد"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>

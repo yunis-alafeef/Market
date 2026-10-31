@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @license
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -225,8 +225,9 @@ function AppInner() {
     details?: string
   ) => {
     const now = new Date();
+    const effective = getEffectiveMarketDate();
     const timestamp =
-      now.toISOString().split('T')[0] +
+      effective.actualDateStr +
       ' ' +
       now.toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
@@ -246,9 +247,10 @@ function AppInner() {
   };
 
   // Get or Create Worksheet for Date
-  const targetWorksheetDate = managerEditingDate || currentWorksheetDate;
+  const targetWorksheetDate = currentWorksheetDate;
   const currentSheet =
-    dailySheets.find((s) => s.date === targetWorksheetDate) ||
+    (managerEditingDate ? dailySheets.find((s) => s.id === managerEditingDate || s.date === managerEditingDate) : null) ||
+    dailySheets.find((s) => s.date === currentWorksheetDate && s.status !== 'settled') ||
     dailySheets.find((s) => s.date === currentWorksheetDate) ||
     dailySheets[0] || {
       id: `sheet_${targetWorksheetDate}`,
@@ -296,9 +298,11 @@ function AppInner() {
             }
           });
           // Supplier amounts
-          if (r.supplierId) {
+          const matchedSupplierId =
+            r.supplierId || suppliers.find((sup) => sup.name === r.supplierName)?.id || '';
+          if (matchedSupplierId) {
             const lineCost = Math.round((Number(r.totalCost) || 0) * 100) / 100;
-            supplierPurchases[r.supplierId] = (supplierPurchases[r.supplierId] || 0) + lineCost;
+            supplierPurchases[matchedSupplierId] = (supplierPurchases[matchedSupplierId] || 0) + lineCost;
           }
         });
       }
@@ -321,7 +325,7 @@ function AppInner() {
       prev.map((g) => {
         const totalDebit = Math.round((groceryPurchases[g.id] || 0) * 100) / 100;
         const totalCredit = Math.round((groceryPaid[g.id] || 0) * 100) / 100;
-        const netBal = Math.max(0, Math.round((totalDebit - totalCredit) * 100) / 100);
+        const netBal = Math.round((totalDebit - totalCredit) * 100) / 100;
         return { ...g, balance: netBal };
       })
     );
@@ -331,11 +335,16 @@ function AppInner() {
       prev.map((s) => {
         const totalOwed = Math.round((supplierPurchases[s.id] || 0) * 100) / 100;
         const totalPaid = Math.round((supplierPaid[s.id] || 0) * 100) / 100;
-        const netBal = Math.max(0, Math.round((totalOwed - totalPaid) * 100) / 100);
+        const netBal = Math.round((totalOwed - totalPaid) * 100) / 100;
         return { ...s, balance: netBal };
       })
     );
   };
+
+  // Auto-recompute balances whenever settled sheets or vouchers change (keeps all devices in sync)
+  useEffect(() => {
+    recalculateAllBalances(dailySheets, vouchers);
+  }, [dailySheets, vouchers, groceries.length, suppliers.length]);
 
   // Normal Worker Settling: Mark settled, update ledgers, zero out worksheet, and backup to Supabase
   const handleSettleWorkerSheet = async (sheetToSettle: DailySheet) => {
@@ -400,7 +409,7 @@ function AppInner() {
   // The KEY REQUIRED FEATURE: "تعديل شامل لليوم"
   const handleEditDayComprehensive = (sheet: DailySheet) => {
     setCurrentWorksheetDate(sheet.date);
-    setManagerEditingDate(sheet.date);
+    setManagerEditingDate(sheet.id);
     setActivePage('worker');
     logAudit(
       'تعديل شامل لليوم',
@@ -415,12 +424,11 @@ function AppInner() {
   const handleSaveManagerEditAndResettle = async (updatedSheet: DailySheet) => {
     const finalSheet: DailySheet = {
       ...updatedSheet,
-      date: managerEditingDate || updatedSheet.date, // Preserve exact original date
       status: 'settled',
       updatedAt: new Date().toLocaleTimeString('ar-SA'),
     };
 
-    const nextSheets = dailySheets.map((s) => (s.id === finalSheet.id || s.date === finalSheet.date ? finalSheet : s));
+    const nextSheets = dailySheets.map((s) => (s.id === finalSheet.id ? finalSheet : s));
     setDailySheets(nextSheets);
     recalculateAllBalances(nextSheets, vouchers);
 
@@ -446,50 +454,44 @@ function AppInner() {
 
   // Add Voucher (Receipt or Payment)
   const handleAddVoucher = (voucherData: Omit<Voucher, 'id' | 'createdAt'>) => {
+    const effective = getEffectiveMarketDate();
+    const nowTime = new Date().toTimeString().split(' ')[0];
     const newVoucher: Voucher = {
       ...voucherData,
       id: `v_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-      createdAt: new Date().toISOString().replace('T', ' ').substring(0, 19),
+      createdAt: `${effective.actualDateStr} ${nowTime}`,
     };
 
-    setVouchers((prev) => [newVoucher, ...prev]);
+    const nextVouchers = [newVoucher, ...vouchers];
+    setVouchers(nextVouchers);
+    recalculateAllBalances(dailySheets, nextVouchers);
 
     if (voucherData.type === 'receipt' && voucherData.partyType === 'grocery') {
-      setGroceries((prev) =>
-        prev.map((g) => {
-          if (g.id === voucherData.partyId) {
-            const oldB = g.balance;
-            const newB = Math.max(0, g.balance - voucherData.amount);
-            logAudit(
-              'تسجيل سند قبض',
-              `${g.name} (${g.code})`,
-              `${oldB.toLocaleString()} ر.س`,
-              `${newB.toLocaleString()} ر.س`,
-              `سند رقم ${newVoucher.voucherNumber} بمبلغ ${voucherData.amount.toLocaleString()} ر.س`
-            );
-            return { ...g, balance: newB };
-          }
-          return g;
-        })
-      );
+      const g = groceries.find((item) => item.id === voucherData.partyId);
+      if (g) {
+        const oldB = g.balance;
+        const newB = Math.round((oldB - voucherData.amount) * 100) / 100;
+        logAudit(
+          'تسجيل سند قبض',
+          `${g.name} (${g.code})`,
+          `${oldB.toLocaleString()} ر.س`,
+          `${newB.toLocaleString()} ر.س`,
+          `سند رقم ${newVoucher.voucherNumber} بمبلغ ${voucherData.amount.toLocaleString()} ر.س`
+        );
+      }
     } else if (voucherData.type === 'payment' && voucherData.partyType === 'supplier') {
-      setSuppliers((prev) =>
-        prev.map((s) => {
-          if (s.id === voucherData.partyId) {
-            const oldB = s.balance;
-            const newB = Math.max(0, s.balance - voucherData.amount);
-            logAudit(
-              'تسجيل سند صرف',
-              s.name,
-              `${oldB.toLocaleString()} ر.س`,
-              `${newB.toLocaleString()} ر.س`,
-              `سند رقم ${newVoucher.voucherNumber} بمبلغ ${voucherData.amount.toLocaleString()} ر.س`
-            );
-            return { ...s, balance: newB };
-          }
-          return s;
-        })
-      );
+      const s = suppliers.find((item) => item.id === voucherData.partyId);
+      if (s) {
+        const oldB = s.balance;
+        const newB = Math.round((oldB - voucherData.amount) * 100) / 100;
+        logAudit(
+          'تسجيل سند صرف',
+          s.name,
+          `${oldB.toLocaleString()} ر.س`,
+          `${newB.toLocaleString()} ر.س`,
+          `سند رقم ${newVoucher.voucherNumber} بمبلغ ${voucherData.amount.toLocaleString()} ر.س`
+        );
+      }
     }
   };
 
@@ -540,7 +542,30 @@ function AppInner() {
     };
 
     setSuppliers((prev) => [...prev, newSupplier]);
+
+    // Auto-assign this supplier to any open sheet rows that lack a valid supplierId
+    setDailySheets((prevSheets) =>
+      prevSheets.map((sh) => {
+        if (sh.status === 'settled') return sh;
+        return {
+          ...sh,
+          rows: sh.rows.map((r) =>
+            !r.supplierId
+              ? { ...r, supplierId: newSupplier.id, supplierName: newSupplier.name }
+              : r
+          ),
+        };
+      })
+    );
+
     logAudit('إضافة مورد جديد', newSupplier.name, '', `الهاتف: ${newSupplier.phone}، التخصص: ${newSupplier.specialty}`);
+  };
+
+  const handleDeleteSupplier = (id: string) => {
+    const s = suppliers.find((item) => item.id === id);
+    if (!s) return;
+    setSuppliers((prev) => prev.filter((item) => item.id !== id));
+    logAudit('حذف مورد', s.name, s.phone, 'محذوف');
   };
 
   // Add Grocery (generates new column automatically!)
@@ -734,6 +759,7 @@ function AppInner() {
             onUpdateSupplier={(sup) =>
               setSuppliers((prev) => prev.map((s) => (s.id === sup.id ? sup : s)))
             }
+            onDeleteSupplier={handleDeleteSupplier}
             onResetData={handleResetData}
           />
         )}

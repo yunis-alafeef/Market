@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+﻿import React, { useState, useMemo } from 'react';
 import { DailySheet, SystemSettings, Grocery, Supplier } from '../types';
 import {
   Calendar,
@@ -43,9 +43,14 @@ export const AdminReportsView: React.FC<AdminReportsViewProps> = ({
 }) => {
   // Sort sheets descending by date
   const sortedSheets = useMemo(() => {
-    return [...dailySheets].sort(
-      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-    );
+    const byDate = new Map<string, DailySheet>();
+    for (const s of dailySheets) {
+      const existing = byDate.get(s.date);
+      if (!existing || (s.status === 'settled' && existing.status !== 'settled')) {
+        byDate.set(s.date, s);
+      }
+    }
+    return Array.from(byDate.values()).sort((a, b) => b.date.localeCompare(a.date));
   }, [dailySheets]);
 
   // Current selected day for detailed single-day inspection
@@ -88,10 +93,10 @@ export const AdminReportsView: React.FC<AdminReportsViewProps> = ({
       setEndDate('');
     } else {
       const now = new Date();
-      const latestSheetDate = sortedSheets[0]?.date ? new Date(sortedSheets[0].date) : now;
+      const latestSheetDate = sortedSheets[0]?.date ? new Date(sortedSheets[0].date + 'T12:00:00') : now;
       const refDate = latestSheetDate;
 
-      const formatIso = (d: Date) => d.toISOString().split('T')[0];
+      const formatIso = (d: Date) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 
       if (preset === 'today') {
         const todayStr = formatIso(refDate);
