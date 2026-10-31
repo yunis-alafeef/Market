@@ -36,7 +36,12 @@ export const LoginModal: React.FC<LoginModalProps> = ({
       return;
     }
 
-    await AuthService.pullUsersFromCloud();
+    try {
+      await AuthService.pullUsersFromCloud();
+    } catch (err: any) {
+      setErrorMsg(err?.message || 'تعذر الاتصال بقاعدة البيانات');
+      return;
+    }
     const res = AuthService.login(phone, pin, rememberDevice);
     if (res.success && res.session) {
       onLoginSuccess(res.session);

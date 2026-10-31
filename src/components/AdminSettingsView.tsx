@@ -72,7 +72,7 @@ export const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
   // User Accounts State
   const [usersList, setUsersList] = useState<UserAccount[]>(() => AuthService.getUsers());
   useEffect(() => {
-    AuthService.pullUsersFromCloud().then(setUsersList);
+    AuthService.pullUsersFromCloud().then(setUsersList).catch(() => {});
   }, []);
   const [showAddUserModal, setShowAddUserModal] = useState(false);
   const [newUserName, setNewUserName] = useState('');

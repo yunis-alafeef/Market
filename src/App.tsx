@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useSyncExternalStore } from 'react';
 import {
   ActivePage,
   DailySheet,
@@ -18,7 +18,7 @@ import {
   AuthSession,
   UserAccount,
 } from './types';
-import { StorageService, getArabicDayName, getEffectiveMarketDate, generateCleanRows, STORAGE_KEYS } from './services/storage';
+import { StorageService, getArabicDayName, getEffectiveMarketDate, generateCleanRows, STORAGE_KEYS, getSyncStatus, subscribeSyncStatus } from './services/storage';
 import { AuthService } from './services/auth';
 import { SupabaseBackupService } from './services/supabaseBackup';
 import { Header } from './components/Header';
@@ -33,7 +33,7 @@ import { AddSupplierModal } from './components/AddSupplierModal';
 import { InvoicePrintModal } from './components/InvoicePrintModal';
 import { LoginModal } from './components/LoginModal';
 
-export default function App() {
+function AppInner() {
   // Authentication & Session
   const [session, setSession] = useState<AuthSession | null>(() => AuthService.getCurrentSession());
   const [isLoginModalOpen, setIsLoginModalOpen] = useState<boolean>(() => {
@@ -800,5 +800,47 @@ export default function App() {
         data={printModalData.data}
       />
     </div>
+  );
+}
+
+export default function App() {
+  const status = useSyncExternalStore(subscribeSyncStatus, getSyncStatus);
+
+  // Initial load from Supabase (retry until the connection succeeds)
+  useEffect(() => {
+    if (status.loaded) return;
+    StorageService.syncFromCloud();
+    const id = setInterval(() => StorageService.syncFromCloud(), 5000);
+    return () => clearInterval(id);
+  }, [status.loaded]);
+
+  const banner = status.error ? (
+    <div dir="rtl" className="fixed top-0 inset-x-0 z-[100] bg-red-600 text-white text-sm font-bold px-4 py-2 text-center shadow-lg">
+      ⚠️ {status.error}
+    </div>
+  ) : null;
+
+  if (!status.loaded) {
+    return (
+      <div dir="rtl" className="min-h-screen flex flex-col items-center justify-center gap-4 bg-slate-50 text-slate-700 p-6 text-center">
+        {banner}
+        <div className="text-lg font-black">جارٍ الاتصال بقاعدة البيانات...</div>
+        {status.error && (
+          <button
+            onClick={() => StorageService.syncFromCloud()}
+            className="px-5 py-2 rounded-xl bg-[#1e3799] text-white font-bold cursor-pointer"
+          >
+            إعادة المحاولة
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <>
+      {banner}
+      <AppInner />
+    </>
   );
 }

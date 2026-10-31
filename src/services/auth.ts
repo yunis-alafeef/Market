@@ -1,5 +1,6 @@
 ﻿import { UserAccount, AuthSession } from '../types';
 import { supabase } from './supabase';
+import { setSyncStatus, describeError } from './storage';
 
 const SESSION_KEY = 'veg_app_auth_session_v2';
 const USERS_STORAGE_KEY = 'veg_app_users_v2';
@@ -113,9 +114,9 @@ export const AuthService = {
       const { error } = await supabase
         .from('app_users')
         .upsert(users.map((u) => ({ id: u.id, data: u, updated_at: new Date().toISOString() })));
-      if (error) console.warn('Supabase app_users sync error:', error.message);
+      if (error) setSyncStatus({ error: describeError(error.message) });
     } catch (e) {
-      console.warn('Supabase app_users sync failed:', e);
+      setSyncStatus({ error: describeError((e as any)?.message || String(e)) });
     }
   },
 
@@ -123,10 +124,7 @@ export const AuthService = {
   async pullUsersFromCloud(): Promise<UserAccount[]> {
     try {
       const { data, error } = await supabase.from('app_users').select('id,data');
-      if (error) {
-        console.warn('Supabase app_users load error:', error.message);
-        return this.getUsers();
-      }
+      if (error) throw new Error(error.message);
       if (data && data.length > 0) {
         const cloudUsers = data.map((r: any) => r.data as UserAccount);
         localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(cloudUsers));
@@ -136,8 +134,9 @@ export const AuthService = {
       await this.pushUsersToCloud(local);
       return local;
     } catch (e) {
-      console.warn('Supabase app_users load failed:', e);
-      return this.getUsers();
+      const msg = describeError((e as any)?.message || String(e));
+      setSyncStatus({ error: msg });
+      throw new Error(msg);
     }
   },
 
@@ -166,7 +165,7 @@ export const AuthService = {
     const updated = users.filter((u) => u.id !== userId);
     this.saveUsers(updated);
     void supabase.from('app_users').delete().eq('id', userId).then(({ error }) => {
-      if (error) console.warn('Supabase app_users delete error:', error.message);
+      if (error) setSyncStatus({ error: describeError(error.message) });
     });
   },
 

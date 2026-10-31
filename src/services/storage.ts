@@ -205,24 +205,49 @@ export const INITIAL_AUDIT_LOGS: AuditLog[] = [
 ];
 
 export function loadFromStorage<T>(key: string, defaultValue: T): T {
-  try {
-    const raw = localStorage.getItem(key);
-    if (!raw) return defaultValue;
-    return JSON.parse(raw);
-  } catch (err) {
-    console.error(`Failed to load ${key} from storage:`, err);
-    return defaultValue;
-  }
+  return key in memCache ? (memCache[key] as T) : defaultValue;
 }
 
 // ---------------------------------------------------------------------------
-// Cloud sync (Supabase table `app_kv`): every stored collection is mirrored to
-// the database so all devices see the same data.
+// Cloud storage (Supabase table `app_kv`): data lives ONLY in the database.
+// Nothing is persisted in the browser; memCache is just the in-memory copy.
 // ---------------------------------------------------------------------------
 const SYNC_KEYS: string[] = Object.values(STORAGE_KEYS);
+const memCache: Record<string, any> = {};
 const lastSynced: Record<string, string> = {};
 const pushTimers: Record<string, ReturnType<typeof setTimeout>> = {};
 let cloudReady = false;
+
+export interface SyncStatus {
+  loaded: boolean;
+  error: string | null;
+}
+let syncStatus: SyncStatus = { loaded: false, error: null };
+const statusListeners = new Set<() => void>();
+
+export function getSyncStatus(): SyncStatus {
+  return syncStatus;
+}
+export function setSyncStatus(patch: Partial<SyncStatus>): void {
+  syncStatus = { ...syncStatus, ...patch };
+  statusListeners.forEach((fn) => fn());
+}
+export function subscribeSyncStatus(fn: () => void): () => void {
+  statusListeners.add(fn);
+  return () => statusListeners.delete(fn);
+}
+export function describeError(msg: string): string {
+  if (/relation .* does not exist|schema cache|Could not find the table/i.test(msg)) {
+    return `جداول قاعدة البيانات غير موجودة في Supabase (نفّذ ملفات SQL): ${msg}`;
+  }
+  if (/permission denied|row-level security/i.test(msg)) {
+    return `لا توجد صلاحية للوصول إلى قاعدة البيانات (تحقق من سياسات RLS): ${msg}`;
+  }
+  if (/fetch|network|Failed to/i.test(msg)) {
+    return `تعذر الاتصال بقاعدة البيانات، تحقق من الإنترنت: ${msg}`;
+  }
+  return `خطأ في الاتصال بقاعدة البيانات: ${msg}`;
+}
 
 function canon(v: unknown): string {
   const sort = (x: any): any => {
@@ -235,37 +260,31 @@ function canon(v: unknown): string {
   return JSON.stringify(sort(v));
 }
 
-function localCanon(key: string): string | null {
-  const raw = localStorage.getItem(key);
-  if (raw == null) return null;
-  try { return canon(JSON.parse(raw)); } catch { return null; }
-}
-
 function schedulePush(key: string): void {
   if (!cloudReady || !SYNC_KEYS.includes(key)) return;
   clearTimeout(pushTimers[key]);
   pushTimers[key] = setTimeout(async () => {
-    const c = localCanon(key);
-    if (c == null || c === lastSynced[key]) return;
+    if (!(key in memCache)) return;
+    const c = canon(memCache[key]);
+    if (c === lastSynced[key]) return;
     try {
       const { error } = await supabase
         .from('app_kv')
-        .upsert({ key, value: JSON.parse(localStorage.getItem(key) as string), updated_at: new Date().toISOString() });
-      if (error) console.warn('Supabase app_kv push error:', error.message);
-      else lastSynced[key] = c;
-    } catch (e) {
-      console.warn('Supabase app_kv push failed:', e);
+        .upsert({ key, value: memCache[key], updated_at: new Date().toISOString() });
+      if (error) {
+        setSyncStatus({ error: describeError(error.message) });
+      } else {
+        lastSynced[key] = c;
+      }
+    } catch (e: any) {
+      setSyncStatus({ error: describeError(e?.message || String(e)) });
     }
-  }, 300);
+  }, 150);
 }
 
 export function saveToStorage<T>(key: string, value: T): void {
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-    schedulePush(key);
-  } catch (err) {
-    console.error(`Failed to save ${key} to storage:`, err);
-  }
+  memCache[key] = value;
+  schedulePush(key);
 }
 
 export const StorageService = {
@@ -374,15 +393,15 @@ export const StorageService = {
   },
 
   /**
-   * Pull the latest data from Supabase into local storage.
-   * Returns the list of storage keys whose local value changed.
+   * Pull the latest data from Supabase into the in-memory cache.
+   * Returns the list of storage keys whose value changed. Connection errors are reported.
    */
   async syncFromCloud(): Promise<string[]> {
     const changed: string[] = [];
     try {
       const { data, error } = await supabase.from('app_kv').select('key,value');
       if (error) {
-        console.warn('Supabase app_kv load error:', error.message);
+        setSyncStatus({ error: describeError(error.message) });
         return changed;
       }
       const firstSync = !cloudReady;
@@ -390,23 +409,24 @@ export const StorageService = {
         const key = row.key as string;
         if (!SYNC_KEYS.includes(key)) continue;
         const cloudC = canon(row.value);
-        const localC = localCanon(key);
+        const localC = key in memCache ? canon(memCache[key]) : null;
         const noUnpushedLocal = localC === lastSynced[key];
         if (cloudC === localC) {
           lastSynced[key] = cloudC;
         } else if (firstSync || noUnpushedLocal) {
-          localStorage.setItem(key, JSON.stringify(row.value));
+          memCache[key] = row.value;
           lastSynced[key] = cloudC;
           changed.push(key);
         }
       }
-      if (firstSync) {
-        cloudReady = true;
-        // Keys that do not exist in the cloud yet are uploaded from this device
-        SYNC_KEYS.forEach((k) => schedulePush(k));
-      }
-    } catch (e) {
-      console.warn('Supabase app_kv sync failed:', e);
+      if (firstSync) cloudReady = true;
+      // Retry any local change that has not reached the database yet
+      SYNC_KEYS.forEach((k) => {
+        if (k in memCache && canon(memCache[k]) !== lastSynced[k]) schedulePush(k);
+      });
+      setSyncStatus({ error: null, loaded: true });
+    } catch (e: any) {
+      setSyncStatus({ error: describeError(e?.message || String(e)) });
     }
     return changed;
   },
@@ -414,14 +434,10 @@ export const StorageService = {
   resetAllData(): void {
     SYNC_KEYS.forEach((k) => {
       delete lastSynced[k];
-      void supabase.from('app_kv').delete().eq('key', k);
+      delete memCache[k];
+      void supabase.from('app_kv').delete().eq('key', k).then(({ error }) => {
+        if (error) setSyncStatus({ error: describeError(error.message) });
+      });
     });
-    localStorage.removeItem(STORAGE_KEYS.GROCERIES);
-    localStorage.removeItem(STORAGE_KEYS.SUPPLIERS);
-    localStorage.removeItem(STORAGE_KEYS.ITEMS);
-    localStorage.removeItem(STORAGE_KEYS.DAILY_SHEETS);
-    localStorage.removeItem(STORAGE_KEYS.VOUCHERS);
-    localStorage.removeItem(STORAGE_KEYS.AUDIT_LOGS);
-    localStorage.removeItem(STORAGE_KEYS.SETTINGS);
   },
 };
