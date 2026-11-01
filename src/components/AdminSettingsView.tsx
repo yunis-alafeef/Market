@@ -32,6 +32,12 @@ import {
   Copy,
   Palette,
   Sparkles,
+  Edit3,
+  Lock,
+  AlertCircle,
+  CheckCircle2,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 
 interface AdminSettingsViewProps {
@@ -39,6 +45,15 @@ interface AdminSettingsViewProps {
   groceries: Grocery[];
   suppliers: Supplier[];
   auditLogs: AuditLog[];
+  currentUser?: UserAccount | null;
+  onSessionUserUpdated?: (updatedUser: UserAccount) => void;
+  onAddAuditLog?: (
+    action: string,
+    target: string,
+    oldValue?: string,
+    newValue?: string,
+    details?: string
+  ) => void;
   currentTheme?: ThemeId;
   onThemeChange?: (theme: ThemeId) => void;
   onUpdateSettings: (settings: SystemSettings) => void;
@@ -56,6 +71,9 @@ export const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
   groceries,
   suppliers,
   auditLogs,
+  currentUser,
+  onSessionUserUpdated,
+  onAddAuditLog,
   currentTheme = 'royal_navy',
   onThemeChange,
   onUpdateSettings,
@@ -73,6 +91,7 @@ export const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
   >('users');
 
   // User Accounts State
+  const effectiveAdmin = currentUser || AuthService.getCurrentSession()?.user || null;
   const [usersList, setUsersList] = useState<UserAccount[]>(() => AuthService.getUsers());
   useEffect(() => {
     AuthService.pullUsersFromCloud().then(setUsersList).catch(() => {});
@@ -83,6 +102,16 @@ export const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
   const [newUserRole, setNewUserRole] = useState<'admin' | 'worker' | 'grocery'>('worker');
   const [newUserGroceryId, setNewUserGroceryId] = useState<string>(groceries[0]?.id || '');
   const [newUserPin, setNewUserPin] = useState('');
+
+  // Edit User Credentials State (Admin-only)
+  const [editingUser, setEditingUser] = useState<UserAccount | null>(null);
+  const [editUsername, setEditUsername] = useState('');
+  const [editUserId, setEditUserId] = useState('');
+  const [editPassword, setEditPassword] = useState('');
+  const [showEditPassword, setShowEditPassword] = useState(false);
+  const [isSavingUserEdit, setIsSavingUserEdit] = useState(false);
+  const [userMgmtSuccessMsg, setUserMgmtSuccessMsg] = useState<string | null>(null);
+  const [userMgmtErrorMsg, setUserMgmtErrorMsg] = useState<string | null>(null);
 
   // Form states for new grocery
   const [newGCode, setNewGCode] = useState('');
@@ -104,51 +133,170 @@ export const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
   // Search in audit logs
   const [auditSearch, setAuditSearch] = useState('');
 
+  // Select user to edit credentials (never pre-fills old password)
+  const handleSelectUserToEdit = (u: UserAccount) => {
+    setUserMgmtErrorMsg(null);
+    setUserMgmtSuccessMsg(null);
+    setEditingUser(u);
+    const displayOrUsername =
+      u.username && u.username !== u.phone ? u.username : u.name;
+    setEditUsername(displayOrUsername);
+    setEditUserId(u.phone || u.id);
+    setEditPassword('');
+    setShowEditPassword(false);
+  };
+
+  // Save edited user credentials (Admin-only)
+  const handleSaveUserCredentials = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingUser) return;
+    setUserMgmtErrorMsg(null);
+    setUserMgmtSuccessMsg(null);
+    setIsSavingUserEdit(true);
+
+    try {
+      const res = await AuthService.updateUserCredentials({
+        actorUser: effectiveAdmin,
+        targetOriginalId: editingUser.id,
+        newUsername: editUsername,
+        newUserId: editUserId,
+        newPassword: editPassword,
+        newDisplayName: editUsername,
+      });
+
+      if (!res.success || !res.user) {
+        setUserMgmtErrorMsg(res.error || '⚠️ حدث خطأ أثناء حفظ تعديلات المستخدم.');
+        setIsSavingUserEdit(false);
+        return;
+      }
+
+      const refreshed = AuthService.getUsers();
+      setUsersList(refreshed);
+
+      if (
+        onSessionUserUpdated &&
+        effectiveAdmin &&
+        (effectiveAdmin.id === editingUser.id || effectiveAdmin.id === res.user.id)
+      ) {
+        onSessionUserUpdated(res.user);
+      }
+
+      if (onAddAuditLog) {
+        onAddAuditLog(
+          'تعديل بيانات حساب مستخدم',
+          `المستخدم: ${res.user.name}`,
+          `الاسم: ${editingUser.name} | الرقم: ${editingUser.phone}`,
+          `الاسم: ${res.user.name} | الرقم: ${res.user.phone}${editPassword.trim() ? ' | تم تعيين كلمة مرور جديدة مشفرة' : ''}`,
+          `قام المدير بتحديث بيانات الدخول للحساب (${res.user.id}).`
+        );
+      }
+
+      setUserMgmtSuccessMsg(
+        `✅ تم حفظ تعديلات بيانات المستخدم بنجاح! (اسم المستخدم: ${res.user.name} | رقم المستخدم: ${res.user.phone}${editPassword.trim() ? ' | تم تحديث وتشفير كلمة المرور الجديدة' : ''})`
+      );
+      setEditingUser(null);
+      setEditPassword('');
+    } catch (err) {
+      setUserMgmtErrorMsg((err as any)?.message || '⚠️ حدث خطأ غير متوقع أثناء الحفظ.');
+    } finally {
+      setIsSavingUserEdit(false);
+    }
+  };
+
   // Handle Add New User
   const handleCreateUser = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newUserName.trim() || !newUserPhone.trim()) return;
+    setUserMgmtErrorMsg(null);
+    setUserMgmtSuccessMsg(null);
 
-    const cleanPhone = newUserPhone.trim().replace(/^0+/, '');
-    // If PIN is not provided, default to their phone number!
+    if (!newUserName.trim() || !newUserPhone.trim()) {
+      setUserMgmtErrorMsg('⚠️ يرجى إدخال اسم المستخدم ورقم المستخدم / الهاتف.');
+      return;
+    }
+
+    const cleanName = newUserName.trim();
+    const cleanPhone = newUserPhone.trim().replace(/\s+/g, '').replace(/^0+/, '');
     const effectivePin = newUserPin.trim() || cleanPhone;
 
-    const created = AuthService.addUser({
-      name: newUserName.trim(),
-      phone: cleanPhone,
-      countryCode: '+967',
-      username: cleanPhone,
-      role: newUserRole,
-      pin: effectivePin,
-      groceryId: newUserRole === 'grocery' ? newUserGroceryId : undefined,
-      avatarBadge: newUserName.trim().charAt(0),
-      active: true,
-    });
+    // Validate duplicate username or phone/ID
+    const existingUsers = AuthService.getUsers();
+    const duplicateName = existingUsers.find(
+      (u) =>
+        u.name.trim().toLowerCase() === cleanName.toLowerCase() ||
+        u.username.trim().toLowerCase() === cleanName.toLowerCase()
+    );
+    if (duplicateName) {
+      setUserMgmtErrorMsg(
+        `⚠️ رفض الإضافة: اسم المستخدم "${cleanName}" موجود مسبقاً في النظام.`
+      );
+      return;
+    }
 
-    setUsersList(AuthService.getUsers());
-    setNewUserName('');
-    setNewUserPhone('');
-    setNewUserPin('');
-    setShowAddUserModal(false);
-    alert(`✅ تم إنشاء حساب جديد بنجاح: ${created.name} (${created.role === 'admin' ? 'مالك / مدير' : created.role === 'worker' ? 'عامل ميداني' : 'صاحب بقالة'})`);
+    const duplicatePhone = existingUsers.find(
+      (u) =>
+        u.phone.replace(/\s+/g, '').replace(/^0+/, '').toLowerCase() === cleanPhone.toLowerCase() ||
+        u.id.trim().toLowerCase() === cleanPhone.toLowerCase()
+    );
+    if (duplicatePhone) {
+      setUserMgmtErrorMsg(
+        `⚠️ رفض الإضافة: رقم المستخدم "${cleanPhone}" مسجل مسبقاً لحساب آخر (${duplicatePhone.name}).`
+      );
+      return;
+    }
+
+    try {
+      const created = AuthService.addUser(
+        {
+          name: cleanName,
+          phone: cleanPhone,
+          countryCode: '+967',
+          username: cleanName,
+          role: newUserRole,
+          pin: effectivePin,
+          groceryId: newUserRole === 'grocery' ? newUserGroceryId : undefined,
+          avatarBadge: cleanName.charAt(0),
+          active: true,
+        },
+        effectiveAdmin
+      );
+
+      setUsersList(AuthService.getUsers());
+      setNewUserName('');
+      setNewUserPhone('');
+      setNewUserPin('');
+      setShowAddUserModal(false);
+      setUserMgmtSuccessMsg(
+        `✅ تم إنشاء حساب جديد بنجاح: ${created.name} (رقم المستخدم: ${created.phone})`
+      );
+    } catch (err) {
+      setUserMgmtErrorMsg((err as any)?.message || '⚠️ فشل إنشاء الحساب');
+    }
   };
 
   const handleDeleteUser = (userId: string) => {
     if (userId === 'usr_admin_younis' || userId === 'usr_admin_mohannad') {
-      alert('لا يمكن حذف حسابات مدراء النظام الرئيسيين (يونس العفيف ومهند الأحمدي)!');
+      setUserMgmtErrorMsg('⚠️ لا يمكن حذف حسابات مدراء النظام الرئيسيين!');
       return;
     }
     if (window.confirm('هل أنت متأكد من حذف هذا الحساب؟')) {
-      AuthService.deleteUser(userId);
+      AuthService.deleteUser(userId, effectiveAdmin);
       setUsersList(AuthService.getUsers());
+      if (editingUser?.id === userId) {
+        setEditingUser(null);
+      }
+      setUserMgmtSuccessMsg('✅ تم حذف الحساب بنجاح.');
     }
   };
 
   const handleToggleUserStatus = (user: UserAccount) => {
     if (user.id === 'usr_admin_younis') return;
-    const updated = { ...user, active: !user.active };
-    AuthService.updateUser(updated);
-    setUsersList(AuthService.getUsers());
+    try {
+      const updated = { ...user, active: !user.active };
+      AuthService.updateUser(updated, effectiveAdmin);
+      setUsersList(AuthService.getUsers());
+    } catch (err) {
+      setUserMgmtErrorMsg((err as any)?.message || '⚠️ غير مصرح');
+    }
   };
 
   // Permission Toggle Helper
@@ -205,6 +353,21 @@ export const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
     onUpdateSettings(brandForm);
     alert('✅ تم حفظ ترويسة وبيانات المؤسسة بنجاح!');
   };
+
+  // Strict Admin Access Protection
+  if (!effectiveAdmin || effectiveAdmin.role !== 'admin') {
+    return (
+      <div className="max-w-2xl mx-auto my-12 p-8 bg-rose-50 border-2 border-rose-200 rounded-3xl text-center space-y-3">
+        <Lock className="w-12 h-12 text-rose-600 mx-auto" />
+        <h2 className="text-lg font-black text-rose-900">
+          ⛔ غير مصرح بالوصول إلى واجهة إدارة الحسابات والإعدادات
+        </h2>
+        <p className="text-xs font-bold text-rose-700">
+          هذه الواجهة مخصصة لمدير النظام فقط. لا يملك العامل أو المستخدم العادي صلاحية الوصول أو تعديل الحسابات.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-20">
@@ -341,22 +504,186 @@ export const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
                 <h3 className="text-base font-bold text-slate-900">
-                  إدارة حسابات المستخدمين (صلاحية خاصة بالمدير يونس العفيف)
+                  إدارة حسابات المستخدمين وصلاحيات تعديل بيانات الدخول (خاص بالمدير فقط)
                 </h3>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  أنت الوحيد الذي ينشئ حسابات العمال وأصحاب البقالات ويحدد رموز دخولهم (PIN) وأرقام هواتفهم.
+                  يمكنك عرض المستخدمين المسجلين وتعديل اسم المستخدم أو رقم المستخدم أو تعيين كلمة مرور جديدة مشفرة لأي حساب.
                 </p>
               </div>
 
               <button
                 type="button"
-                onClick={() => setShowAddUserModal(!showAddUserModal)}
+                onClick={() => {
+                  setShowAddUserModal(!showAddUserModal);
+                  setUserMgmtErrorMsg(null);
+                  setUserMgmtSuccessMsg(null);
+                }}
                 className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-[#0c2461] hover:bg-[#1e3799] rounded-xl transition-colors cursor-pointer shadow-xs whitespace-nowrap"
               >
                 <Plus className="w-4 h-4" />
                 <span>+ إنشاء حساب مستخدم جديد</span>
               </button>
             </div>
+
+            {/* Success & Error Alert Messages */}
+            {userMgmtSuccessMsg && (
+              <div className="flex items-center justify-between gap-3 p-4 rounded-2xl bg-emerald-50 border border-emerald-300 text-emerald-900 text-xs font-bold shadow-xs">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-5 h-5 text-[#009432] shrink-0" />
+                  <span>{userMgmtSuccessMsg}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setUserMgmtSuccessMsg(null)}
+                  className="text-emerald-700 hover:text-emerald-950 px-2 py-0.5 rounded font-black cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+
+            {userMgmtErrorMsg && (
+              <div className="flex items-center justify-between gap-3 p-4 rounded-2xl bg-rose-50 border border-rose-300 text-rose-900 text-xs font-bold shadow-xs">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="w-5 h-5 text-rose-600 shrink-0" />
+                  <span>{userMgmtErrorMsg}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setUserMgmtErrorMsg(null)}
+                  className="text-rose-700 hover:text-rose-950 px-2 py-0.5 rounded font-black cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+
+            {/* Edit Selected User Credentials Panel */}
+            {editingUser && (
+              <form
+                onSubmit={handleSaveUserCredentials}
+                className="bg-amber-50/70 p-5 rounded-2xl border-2 border-[#0c2461]/25 space-y-4 shadow-sm"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-xl bg-[#0c2461] text-white flex items-center justify-center">
+                      <Edit3 className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-black text-[#0c2461]">
+                        تعديل بيانات الدخول للمستخدم المحدد
+                      </h4>
+                      <p className="text-[11px] text-slate-600">
+                        يتم حفظ كلمات المرور ببصمة تشفير آمنة (SHA-256) ولا يتم عرض كلمة المرور القديمة.
+                      </p>
+                    </div>
+                  </div>
+                  <span className="px-3 py-1 rounded-full text-xs font-bold bg-[#0c2461]/10 text-[#0c2461]">
+                    الصلاحية: {editingUser.role === 'admin' ? 'مدير النظام' : editingUser.role === 'worker' ? 'عامل ميداني' : 'صاحب بقالة'}
+                  </span>
+                </div>
+
+                {/* Current User Info Summary */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-white p-3.5 rounded-xl border border-slate-200 text-xs">
+                  <div>
+                    <span className="text-slate-500 block text-[11px]">اسم المستخدم الحالي:</span>
+                    <span className="font-black text-slate-900">{editingUser.name}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block text-[11px]">رقم المستخدم الحالي (User ID):</span>
+                    <span className="font-mono font-bold text-[#0c2461] dir-ltr inline-block">
+                      {editingUser.phone || editingUser.id}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block text-[11px]">حالة كلمة المرور الحالية:</span>
+                    <span className="font-bold text-emerald-700 inline-flex items-center gap-1">
+                      <Lock className="w-3.5 h-3.5" /> محمية ومشفرة (لا تُعرض أمنياً)
+                    </span>
+                  </div>
+                </div>
+
+                {/* Editable Fields */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-800 mb-1.5">
+                      اسم المستخدم الجديد (Username) *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="أدخل اسم المستخدم الجديد"
+                      value={editUsername}
+                      onChange={(e) => setEditUsername(e.target.value)}
+                      className="w-full px-3 py-2.5 text-xs font-bold bg-white border border-slate-300 rounded-xl focus:outline-none focus:border-[#0c2461]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-800 mb-1.5">
+                      رقم المستخدم الجديد (User ID) *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="أدخل رقم المستخدم الجديد"
+                      value={editUserId}
+                      onChange={(e) => setEditUserId(e.target.value)}
+                      className="w-full px-3 py-2.5 text-xs font-mono font-bold bg-white border border-slate-300 rounded-xl focus:outline-none focus:border-[#0c2461]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-800 mb-1.5">
+                      كلمة المرور الجديدة (Password)
+                    </label>
+                    <div className="relative flex items-center">
+                      <input
+                        type={showEditPassword ? 'text' : 'password'}
+                        autoComplete="new-password"
+                        placeholder="اتركه فارغاً للإبقاء على كلمة المرور الحالية"
+                        value={editPassword}
+                        onChange={(e) => setEditPassword(e.target.value)}
+                        className="w-full px-3 py-2.5 pl-9 text-xs font-mono font-bold bg-white border border-slate-300 rounded-xl focus:outline-none focus:border-[#0c2461]"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowEditPassword(!showEditPassword)}
+                        className="absolute left-2.5 text-slate-400 hover:text-slate-700 cursor-pointer"
+                        title={showEditPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور الجديدة'}
+                      >
+                        {showEditPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                    <span className="text-[10px] text-slate-500 mt-1 block">
+                      عند إدخال كلمة مرور جديدة سيتم تشفيرها وحفظ بصمتها الآمنة فقط.
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-3 border-t border-slate-200">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingUser(null);
+                      setEditPassword('');
+                      setUserMgmtErrorMsg(null);
+                    }}
+                    className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-200 rounded-xl cursor-pointer"
+                  >
+                    إلغاء
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSavingUserEdit}
+                    className="flex items-center gap-1.5 px-5 py-2 text-xs font-bold text-white bg-[#009432] hover:bg-[#007b29] disabled:opacity-60 rounded-xl shadow-xs cursor-pointer"
+                  >
+                    <Save className="w-4 h-4" />
+                    <span>{isSavingUserEdit ? 'جارٍ الحفظ...' : 'حفظ التعديلات'}</span>
+                  </button>
+                </div>
+              </form>
+            )}
 
             {/* Create User Form Box */}
             {showAddUserModal && (
@@ -367,7 +694,7 @@ export const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
                   <div>
-                    <label className="block text-xs font-medium text-slate-700 mb-1">الاسم الكامل *</label>
+                    <label className="block text-xs font-medium text-slate-700 mb-1">اسم المستخدم (Username) *</label>
                     <input
                       type="text"
                       required
@@ -379,13 +706,13 @@ export const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
                   </div>
 
                   <div>
-                    <label className="block text-xs font-medium text-slate-700 mb-1">رقم الهاتف (اليمن) *</label>
+                    <label className="block text-xs font-medium text-slate-700 mb-1">رقم المستخدم / الهاتف (User ID) *</label>
                     <div className="flex items-center bg-white border border-slate-300 rounded-xl overflow-hidden">
                       <span className="px-2 py-2 bg-slate-100 font-mono text-[11px] font-bold text-slate-600 border-l border-slate-300">
                         +967
                       </span>
                       <input
-                        type="tel"
+                        type="text"
                         required
                         placeholder="77xxxxxxx"
                         value={newUserPhone}
@@ -409,11 +736,11 @@ export const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
                   </div>
 
                   <div>
-                    <label className="block text-xs font-medium text-slate-700 mb-1">كلمة المرور / رمز الدخول (PIN)</label>
+                    <label className="block text-xs font-medium text-slate-700 mb-1">كلمة المرور (Password)</label>
                     <input
-                      type="text"
-                      maxLength={25}
-                      placeholder="اتركه فارغاً ليصبح رقم الهاتف تلقائياً"
+                      type="password"
+                      maxLength={32}
+                      placeholder="اتركه فارغاً ليصبح رقم المستخدم تلقائياً"
                       value={newUserPin}
                       onChange={(e) => setNewUserPin(e.target.value)}
                       className="w-full px-3 py-2 text-xs font-mono font-bold text-center bg-white border border-slate-300 rounded-xl focus:outline-none"
@@ -461,28 +788,41 @@ export const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
               <table className="w-full text-right border-collapse text-xs sm:text-sm">
                 <thead>
                   <tr className="bg-[#0c2461] text-white">
-                    <th className="p-3 font-bold">اسم المستخدم</th>
-                    <th className="p-3 font-bold">رقم الهاتف (اليمن)</th>
+                    <th className="p-3 font-bold">اسم المستخدم (Username)</th>
+                    <th className="p-3 font-bold">رقم المستخدم (User ID)</th>
                     <th className="p-3 font-bold">الصلاحية</th>
                     <th className="p-3 font-bold">البقالة المرتبطة</th>
-                    <th className="p-3 text-center font-bold">رمز الدخول (PIN)</th>
+                    <th className="p-3 text-center font-bold">كلمة المرور</th>
                     <th className="p-3 text-center font-bold">الحالة</th>
-                    <th className="p-3 text-center font-bold w-20">إجراءات</th>
+                    <th className="p-3 text-center font-bold w-40">إجراءات التحكم</th>
                   </tr>
                 </thead>
                 <tbody>
                   {usersList.map((u) => {
                     const linkedGrocery = groceries.find((g) => g.id === u.groceryId);
                     const isMainAdmin = u.id === 'usr_admin_younis' || u.id === 'usr_admin_mohannad' || u.role === 'admin';
+                    const isBeingEdited = editingUser?.id === u.id;
 
                     return (
-                      <tr key={u.id} className="border-b border-slate-200 hover:bg-slate-50">
+                      <tr
+                        key={u.id}
+                        className={`border-b border-slate-200 transition-colors ${
+                          isBeingEdited ? 'bg-amber-50/90' : 'hover:bg-slate-50'
+                        }`}
+                      >
                         <td className="p-3 font-bold text-slate-900">
                           <div className="flex items-center gap-2">
                             <span className="w-7 h-7 rounded-lg bg-slate-100 text-[#0c2461] font-black flex items-center justify-center text-xs">
                               {u.avatarBadge}
                             </span>
-                            <span>{u.name}</span>
+                            <div>
+                              <span className="block">{u.name}</span>
+                              {u.username && u.username !== u.name && u.username !== u.phone && (
+                                <span className="text-[11px] font-mono text-slate-500 block">
+                                  @{u.username}
+                                </span>
+                              )}
+                            </div>
                             {isMainAdmin && (
                               <span className="text-[10px] bg-amber-100 text-amber-900 px-2 py-0.5 rounded-full font-bold">
                                 مدير عام
@@ -491,8 +831,8 @@ export const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
                           </div>
                         </td>
 
-                        <td className="p-3 font-mono text-slate-700">
-                          {u.countryCode} {u.phone}
+                        <td className="p-3 font-mono font-bold text-slate-700">
+                          <span className="dir-ltr inline-block">{u.phone || u.id}</span>
                         </td>
 
                         <td className="p-3">
@@ -513,8 +853,11 @@ export const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
                           {linkedGrocery ? `(${linkedGrocery.code}) ${linkedGrocery.name}` : '-'}
                         </td>
 
-                        <td className="p-3 text-center font-mono font-bold text-slate-800 bg-slate-100/60 rounded">
-                          {u.pin}
+                        <td className="p-3 text-center font-mono font-bold text-slate-600 bg-slate-100/60 rounded">
+                          <span className="inline-flex items-center gap-1 text-xs" title="كلمة المرور مشفرة بآلية SHA-256">
+                            <Lock className="w-3 h-3 text-emerald-600" />
+                            <span>••••••••</span>
+                          </span>
                         </td>
 
                         <td className="p-3 text-center">
@@ -533,16 +876,28 @@ export const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
                         </td>
 
                         <td className="p-3 text-center">
-                          {!isMainAdmin && (
+                          <div className="flex items-center justify-center gap-1.5">
                             <button
                               type="button"
-                              onClick={() => handleDeleteUser(u.id)}
-                              className="p-1 text-slate-400 hover:text-rose-600 rounded transition-colors cursor-pointer"
-                              title="حذف الحساب"
+                              onClick={() => handleSelectUserToEdit(u)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold text-[#0c2461] bg-[#0c2461]/10 hover:bg-[#0c2461] hover:text-white rounded-lg transition-colors cursor-pointer"
+                              title="تعديل اسم المستخدم أو رقم المستخدم أو كلمة المرور"
                             >
-                              <Trash2 className="w-4 h-4" />
+                              <Edit3 className="w-3.5 h-3.5" />
+                              <span>تعديل البيانات</span>
                             </button>
-                          )}
+
+                            {!isMainAdmin && (
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteUser(u.id)}
+                                className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg transition-colors cursor-pointer"
+                                title="حذف الحساب"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );

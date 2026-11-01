@@ -881,12 +881,17 @@ function AppInner() {
         )}
 
         {/* Page 4: Admin Settings & Audit Trail */}
-        {activePage === 'settings' && (
+        {activePage === 'settings' && currentRole === 'admin' && (
           <AdminSettingsView
             settings={settings}
             groceries={groceries}
             suppliers={suppliers}
             auditLogs={auditLogs}
+            currentUser={currentUser}
+            onSessionUserUpdated={(updatedUser) =>
+              setSession((prev) => (prev ? { ...prev, user: updatedUser } : prev))
+            }
+            onAddAuditLog={logAudit}
             currentTheme={currentTheme}
             onThemeChange={setCurrentTheme}
             onUpdateSettings={setSettings}

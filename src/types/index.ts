@@ -123,6 +123,7 @@ export interface UserAccount {
   username: string;
   role: 'admin' | 'worker' | 'grocery';
   pin: string;
+  passwordHash?: string;
   groceryId?: string; // if role === 'grocery'
   avatarBadge: string;
   active: boolean;

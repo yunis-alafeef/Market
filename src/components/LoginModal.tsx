@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { AuthService } from '../services/auth';
 import { AuthSession } from '../types';
 import { Smartphone, Lock, LogIn, AlertCircle } from 'lucide-react';
@@ -78,23 +78,23 @@ export const LoginModal: React.FC<LoginModalProps> = ({
         <div className="p-6 space-y-5">
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Phone Input with +967 Yemen Prefix */}
+            {/* Username or User ID / Phone Input */}
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center gap-1">
                 <Smartphone className="w-3.5 h-3.5 text-slate-400" />
-                <span>رقم الهاتف المسجل (اليمن)</span>
+                <span>اسم المستخدم أو رقم المستخدم / الهاتف</span>
               </label>
               <div className="flex items-center bg-slate-50 border border-slate-300 rounded-2xl overflow-hidden focus-within:ring-2 focus-within:ring-[#0c2461] focus-within:bg-white transition-all">
                 <span className="px-3.5 py-2.5 bg-slate-200/80 font-mono text-xs font-black text-slate-700 select-none border-l border-slate-300 flex items-center gap-1 shrink-0">
                   🇾🇪 +967
                 </span>
                 <input
-                  type="tel"
+                  type="text"
                   required
                   autoFocus
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
-                  placeholder="77XXXXXXX"
+                  placeholder="اسم المستخدم أو رقم المستخدم (مثال: 77XXXXXXX)"
                   className="w-full px-3 py-2.5 text-sm font-mono font-bold text-slate-900 bg-transparent focus:outline-none"
                 />
               </div>
