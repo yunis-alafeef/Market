@@ -172,10 +172,20 @@ export const INITIAL_SYSTEM_USERS: UserAccount[] = [
   INITIAL_ADMIN_MOHANNAD,
 ];
 
+export function generateTemporaryPassword(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+  let code = 'Tmp-';
+  for (let i = 0; i < 6; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code;
+}
+
 export const AuthService = {
   hashPassword,
   verifyPassword,
   isPasswordHashed,
+  generateTemporaryPassword,
 
   getUsers(): UserAccount[] {
     try {
@@ -315,9 +325,10 @@ export const AuthService = {
   },
 
   /**
-   * Admin-only method to edit any registered user's Username, Password, and User ID / Phone.
+   * Admin-only method to edit any registered user's Username, Password, User ID / Phone, Role,
+   * Linked Grocery, and Active Status.
    * Performs backend/service-level admin authorization, uniqueness & non-empty validation,
-   * SHA-256 password hashing, and preserves all user relationships & active sessions.
+   * SHA-256 password hashing, and preserves internal user IDs, relationships & active sessions.
    */
   async updateUserCredentials(params: {
     actorUser?: UserAccount | null;
@@ -326,6 +337,9 @@ export const AuthService = {
     newUserId: string;
     newPassword?: string;
     newDisplayName?: string;
+    newRole?: 'admin' | 'worker' | 'grocery';
+    newGroceryId?: string;
+    newActive?: boolean;
   }): Promise<{ success: boolean; user?: UserAccount; error?: string }> {
     // 1. Verify Admin authorization locally
     const authCheck = this.verifyAdminActor(params.actorUser);
@@ -334,7 +348,7 @@ export const AuthService = {
         success: false,
         error:
           authCheck.error ||
-          '⛔ غير مصرح: هذه العملية مخصصة لمدير النظام فقط ولا يملك العامل أو المستخدم العادي صلاحية تعديل الحسابات.',
+          '⛔ غير مصرح: هذه العملية مخصصة لمدير النظام فقط ولا يملك العامل أو المستخدم العادي صلاحية تعديل الحسابات أو الصلاحيات.',
       };
     }
 
@@ -370,6 +384,14 @@ export const AuthService = {
     const cleanDisplayName = String(params.newDisplayName ?? '').trim() || cleanUsername;
     const rawNewPassword = params.newPassword !== undefined ? String(params.newPassword).trim() : '';
 
+    const nextRole: 'admin' | 'worker' | 'grocery' =
+      params.newRole && ['admin', 'worker', 'grocery'].includes(params.newRole)
+        ? params.newRole
+        : currentTarget.role;
+
+    const nextActive: boolean =
+      typeof params.newActive === 'boolean' ? params.newActive : currentTarget.active;
+
     // 3. Validate required fields are non-empty
     if (!cleanUsername) {
       return {
@@ -388,6 +410,39 @@ export const AuthService = {
         success: false,
         error: '⚠️ رفض التعديل: اسم المستخدم قصير جداً (يجب أن يتكون من حرفين على الأقل).',
       };
+    }
+
+    // Validate Role & Linked Grocery rules:
+    // - If role is 'grocery' (Store Owner), must have a valid non-empty groceryId.
+    // - If converted from 'grocery' to 'worker' or 'admin', preserve previous groceryId so historical associations are never lost.
+    const candidateGroceryId =
+      params.newGroceryId !== undefined
+        ? String(params.newGroceryId).trim()
+        : currentTarget.groceryId || '';
+
+    if (nextRole === 'grocery' && !candidateGroceryId) {
+      return {
+        success: false,
+        error: '⚠️ رفض التعديل: لا يمكن حفظ حساب بصلاحية "صاحب البقالة" دون تحديد البقالة المرتبطة به.',
+      };
+    }
+
+    const preservedGroceryId =
+      nextRole === 'grocery'
+        ? candidateGroceryId
+        : currentTarget.groceryId || (candidateGroceryId ? candidateGroceryId : undefined);
+
+    // Ensure at least one active admin remains in the system
+    if (currentTarget.role === 'admin' && (nextRole !== 'admin' || !nextActive)) {
+      const otherActiveAdmins = users.filter(
+        (u) => u.id !== currentTarget.id && u.role === 'admin' && u.active
+      );
+      if (otherActiveAdmins.length === 0) {
+        return {
+          success: false,
+          error: '⚠️ رفض التعديل: يجب بقاء مدير نظام نشط واحد على الأقل في النظام.',
+        };
+      }
     }
 
     // 4. Validate uniqueness of Username and User ID across all OTHER users
@@ -440,19 +495,18 @@ export const AuthService = {
       nextPasswordHash = hashPassword(rawNewPassword);
     }
 
-    // Determine updated user ID:
-    // Keep internal ID stable if cleanUserId matches old phone, or update ID if admin customized it
-    const oldId = currentTarget.id;
-    const oldPhone = currentTarget.phone;
-    const nextId =
-      cleanUserId !== oldPhone && cleanUserId !== oldId ? cleanUserId : oldId;
+    // Preserve internal primary key (id) so database foreign keys & historical records never break
+    const stableInternalId = currentTarget.id;
 
     const updatedUser: UserAccount = {
       ...currentTarget,
-      id: nextId,
+      id: stableInternalId,
       name: cleanDisplayName,
       username: cleanUsername,
       phone: cleanUserId,
+      role: nextRole,
+      groceryId: preservedGroceryId,
+      active: nextActive,
       passwordHash: nextPasswordHash,
       pin: '••••••••',
       avatarBadge: cleanDisplayName.charAt(0) || currentTarget.avatarBadge || 'م',
@@ -482,10 +536,6 @@ export const AuthService = {
           error: `❌ فشل حفظ التعديلات في قاعدة البيانات: ${describeError(upsertErr.message)}`,
         };
       }
-
-      if (nextId !== oldId) {
-        await supabase.from('app_users').delete().eq('id', oldId);
-      }
     } catch (e) {
       const msg = describeError((e as any)?.message || String(e));
       setSyncStatus({ error: msg });
@@ -495,20 +545,21 @@ export const AuthService = {
       };
     }
 
-    // 7. Preserve active session if the modified account is currently logged in
+    // 7. Update or terminate active session if the modified account is currently logged in
     const currentSession = this.getCurrentSession();
-    if (
-      currentSession &&
-      (currentSession.user.id === oldId || currentSession.user.id === updatedUser.id)
-    ) {
-      const updatedSession: AuthSession = {
-        ...currentSession,
-        user: updatedUser,
-      };
-      try {
-        localStorage.setItem(SESSION_KEY, JSON.stringify(updatedSession));
-      } catch {
-        // ignore storage error
+    if (currentSession && currentSession.user.id === stableInternalId) {
+      if (!updatedUser.active) {
+        this.logout();
+      } else {
+        const updatedSession: AuthSession = {
+          ...currentSession,
+          user: updatedUser,
+        };
+        try {
+          localStorage.setItem(SESSION_KEY, JSON.stringify(updatedSession));
+        } catch {
+          // ignore storage error
+        }
       }
     }
 

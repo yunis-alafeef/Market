@@ -103,12 +103,16 @@ export const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
   const [newUserGroceryId, setNewUserGroceryId] = useState<string>(groceries[0]?.id || '');
   const [newUserPin, setNewUserPin] = useState('');
 
-  // Edit User Credentials State (Admin-only)
+  // Edit User Credentials & Role State (Admin-only)
   const [editingUser, setEditingUser] = useState<UserAccount | null>(null);
   const [editUsername, setEditUsername] = useState('');
   const [editUserId, setEditUserId] = useState('');
   const [editPassword, setEditPassword] = useState('');
   const [showEditPassword, setShowEditPassword] = useState(false);
+  const [editRole, setEditRole] = useState<'admin' | 'worker' | 'grocery'>('worker');
+  const [editGroceryId, setEditGroceryId] = useState<string>('');
+  const [editActive, setEditActive] = useState<boolean>(true);
+  const [showNewUserPassword, setShowNewUserPassword] = useState(false);
   const [isSavingUserEdit, setIsSavingUserEdit] = useState(false);
   const [userMgmtSuccessMsg, setUserMgmtSuccessMsg] = useState<string | null>(null);
   const [userMgmtErrorMsg, setUserMgmtErrorMsg] = useState<string | null>(null);
@@ -133,7 +137,14 @@ export const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
   // Search in audit logs
   const [auditSearch, setAuditSearch] = useState('');
 
-  // Select user to edit credentials (never pre-fills old password)
+  const getRoleLabelAr = (r: 'admin' | 'worker' | 'grocery') =>
+    r === 'admin'
+      ? 'مدير النظام (Admin)'
+      : r === 'worker'
+      ? 'العامل الميداني (Worker)'
+      : 'صاحب البقالة (Store Owner)';
+
+  // Select user to edit credentials & role (never pre-fills old password)
   const handleSelectUserToEdit = (u: UserAccount) => {
     setUserMgmtErrorMsg(null);
     setUserMgmtSuccessMsg(null);
@@ -144,14 +155,32 @@ export const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
     setEditUserId(u.phone || u.id);
     setEditPassword('');
     setShowEditPassword(false);
+    setEditRole(u.role);
+    setEditGroceryId(u.groceryId || groceries[0]?.id || '');
+    setEditActive(u.active);
   };
 
-  // Save edited user credentials (Admin-only)
+  // Generate a temporary password in the edit form and reveal it for the Admin to review
+  const handleGenerateTempPassword = () => {
+    const tempPass = AuthService.generateTemporaryPassword();
+    setEditPassword(tempPass);
+    setShowEditPassword(true);
+  };
+
+  // Save edited user credentials & role (Admin-only)
   const handleSaveUserCredentials = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingUser) return;
     setUserMgmtErrorMsg(null);
     setUserMgmtSuccessMsg(null);
+
+    if (editRole === 'grocery' && !editGroceryId.trim()) {
+      setUserMgmtErrorMsg(
+        '⚠️ لا يمكن حفظ حساب بصلاحية "صاحب البقالة" دون تحديد البقالة المرتبطة به.'
+      );
+      return;
+    }
+
     setIsSavingUserEdit(true);
 
     try {
@@ -162,6 +191,9 @@ export const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
         newUserId: editUserId,
         newPassword: editPassword,
         newDisplayName: editUsername,
+        newRole: editRole,
+        newGroceryId: editRole === 'grocery' ? editGroceryId : editingUser.groceryId,
+        newActive: editActive,
       });
 
       if (!res.success || !res.user) {
@@ -181,18 +213,27 @@ export const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
         onSessionUserUpdated(res.user);
       }
 
+      const linkedGName =
+        res.user.role === 'grocery'
+          ? groceries.find((g) => g.id === res.user?.groceryId)?.name || res.user.groceryId
+          : '-';
+
       if (onAddAuditLog) {
         onAddAuditLog(
-          'تعديل بيانات حساب مستخدم',
+          'تعديل بيانات وصلاحيات حساب مستخدم',
           `المستخدم: ${res.user.name}`,
-          `الاسم: ${editingUser.name} | الرقم: ${editingUser.phone}`,
-          `الاسم: ${res.user.name} | الرقم: ${res.user.phone}${editPassword.trim() ? ' | تم تعيين كلمة مرور جديدة مشفرة' : ''}`,
-          `قام المدير بتحديث بيانات الدخول للحساب (${res.user.id}).`
+          `الاسم: ${editingUser.name} | الرقم: ${editingUser.phone} | الصلاحية: ${getRoleLabelAr(editingUser.role)} | الحالة: ${editingUser.active ? 'نشط' : 'غير نشط'}`,
+          `الاسم: ${res.user.name} | الرقم: ${res.user.phone} | الصلاحية: ${getRoleLabelAr(res.user.role)}${res.user.role === 'grocery' ? ` (${linkedGName})` : ''} | الحالة: ${res.user.active ? 'نشط' : 'غير نشط'}${editPassword.trim() ? ' | تم تعيين كلمة مرور جديدة مشفرة' : ''}`,
+          `قام المدير (${effectiveAdmin?.name || 'مدير النظام'}) بتحديث بيانات وصلاحيات الحساب (${res.user.id}).`
         );
       }
 
+      const assignedPassNotice = editPassword.trim()
+        ? ` | كلمة المرور الجديدة التي قمت بتعيينها: [${editPassword.trim()}] (تم تشفيرها وحفظ بصمتها الآمنة)`
+        : '';
+
       setUserMgmtSuccessMsg(
-        `✅ تم حفظ تعديلات بيانات المستخدم بنجاح! (اسم المستخدم: ${res.user.name} | رقم المستخدم: ${res.user.phone}${editPassword.trim() ? ' | تم تحديث وتشفير كلمة المرور الجديدة' : ''})`
+        `✅ تم حفظ تعديلات المستخدم بنجاح! (اسم المستخدم: ${res.user.name} | رقم المستخدم: ${res.user.phone} | الصلاحية: ${getRoleLabelAr(res.user.role)}${res.user.role === 'grocery' ? ` - ${linkedGName}` : ''} | الحالة: ${res.user.active ? 'نشط' : 'غير نشط'}${assignedPassNotice})`
       );
       setEditingUser(null);
       setEditPassword('');
@@ -558,7 +599,7 @@ export const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
               </div>
             )}
 
-            {/* Edit Selected User Credentials Panel */}
+            {/* Edit Selected User Credentials & Permissions Panel */}
             {editingUser && (
               <form
                 onSubmit={handleSaveUserCredentials}
@@ -571,20 +612,20 @@ export const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
                     </div>
                     <div>
                       <h4 className="text-sm font-black text-[#0c2461]">
-                        تعديل بيانات الدخول للمستخدم المحدد
+                        نموذج تعديل بيانات وصلاحيات المستخدم المحدد
                       </h4>
                       <p className="text-[11px] text-slate-600">
-                        يتم حفظ كلمات المرور ببصمة تشفير آمنة (SHA-256) ولا يتم عرض كلمة المرور القديمة.
+                        تعديل اسم المستخدم، رقم المستخدم، كلمة المرور الجديدة، صلاحية الحساب، البقالة المرتبطة، وحالة الحساب.
                       </p>
                     </div>
                   </div>
                   <span className="px-3 py-1 rounded-full text-xs font-bold bg-[#0c2461]/10 text-[#0c2461]">
-                    الصلاحية: {editingUser.role === 'admin' ? 'مدير النظام' : editingUser.role === 'worker' ? 'عامل ميداني' : 'صاحب بقالة'}
+                    الصلاحية الحالية: {getRoleLabelAr(editingUser.role)}
                   </span>
                 </div>
 
                 {/* Current User Info Summary */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-white p-3.5 rounded-xl border border-slate-200 text-xs">
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 bg-white p-3.5 rounded-xl border border-slate-200 text-xs">
                   <div>
                     <span className="text-slate-500 block text-[11px]">اسم المستخدم الحالي:</span>
                     <span className="font-black text-slate-900">{editingUser.name}</span>
@@ -596,47 +637,67 @@ export const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
                     </span>
                   </div>
                   <div>
-                    <span className="text-slate-500 block text-[11px]">حالة كلمة المرور الحالية:</span>
+                    <span className="text-slate-500 block text-[11px]">الصلاحية وحالة الحساب الحالية:</span>
+                    <span className="font-bold text-slate-800">
+                      {getRoleLabelAr(editingUser.role)} ({editingUser.active ? 'نشط' : 'غير نشط'})
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block text-[11px]">كلمة المرور المخزنة:</span>
                     <span className="font-bold text-emerald-700 inline-flex items-center gap-1">
-                      <Lock className="w-3.5 h-3.5" /> محمية ومشفرة (لا تُعرض أمنياً)
+                      <Lock className="w-3.5 h-3.5" /> محمية بـ Hash (لا تُعرض القديمة)
                     </span>
                   </div>
                 </div>
 
                 {/* Editable Fields */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {/* 1. Username */}
                   <div>
                     <label className="block text-xs font-bold text-slate-800 mb-1.5">
-                      اسم المستخدم الجديد (Username) *
+                      اسم المستخدم (Username) *
                     </label>
                     <input
                       type="text"
                       required
-                      placeholder="أدخل اسم المستخدم الجديد"
+                      placeholder="أدخل اسم المستخدم"
                       value={editUsername}
                       onChange={(e) => setEditUsername(e.target.value)}
                       className="w-full px-3 py-2.5 text-xs font-bold bg-white border border-slate-300 rounded-xl focus:outline-none focus:border-[#0c2461]"
                     />
                   </div>
 
+                  {/* 2. User ID */}
                   <div>
                     <label className="block text-xs font-bold text-slate-800 mb-1.5">
-                      رقم المستخدم الجديد (User ID) *
+                      رقم المستخدم (User ID) *
                     </label>
                     <input
                       type="text"
                       required
-                      placeholder="أدخل رقم المستخدم الجديد"
+                      placeholder="أدخل رقم المستخدم"
                       value={editUserId}
                       onChange={(e) => setEditUserId(e.target.value)}
                       className="w-full px-3 py-2.5 text-xs font-mono font-bold bg-white border border-slate-300 rounded-xl focus:outline-none focus:border-[#0c2461]"
                     />
                   </div>
 
+                  {/* 3. New Password with Eye Toggle + Generate Temporary Password */}
                   <div>
-                    <label className="block text-xs font-bold text-slate-800 mb-1.5">
-                      كلمة المرور الجديدة (Password)
-                    </label>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="block text-xs font-bold text-slate-800">
+                        كلمة المرور الجديدة (Password)
+                      </label>
+                      <button
+                        type="button"
+                        onClick={handleGenerateTempPassword}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-bold text-[#0c2461] bg-[#0c2461]/10 hover:bg-[#0c2461] hover:text-white rounded-lg transition-colors cursor-pointer"
+                        title="إنشاء كلمة مرور مؤقتة وإظهارها للمراجعة قبل الحفظ"
+                      >
+                        <Key className="w-3 h-3" />
+                        <span>إنشاء كلمة مرور مؤقتة</span>
+                      </button>
+                    </div>
                     <div className="relative flex items-center">
                       <input
                         type={showEditPassword ? 'text' : 'password'}
@@ -649,15 +710,77 @@ export const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
                       <button
                         type="button"
                         onClick={() => setShowEditPassword(!showEditPassword)}
-                        className="absolute left-2.5 text-slate-400 hover:text-slate-700 cursor-pointer"
-                        title={showEditPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور الجديدة'}
+                        className="absolute left-2.5 text-slate-500 hover:text-[#0c2461] cursor-pointer"
+                        title={showEditPassword ? 'إخفاء كلمة المرور الجديدة' : 'إظهار كلمة المرور الجديدة للمراجعة'}
                       >
                         {showEditPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                       </button>
                     </div>
                     <span className="text-[10px] text-slate-500 mt-1 block">
-                      عند إدخال كلمة مرور جديدة سيتم تشفيرها وحفظ بصمتها الآمنة فقط.
+                      {editPassword.trim()
+                        ? showEditPassword
+                          ? `كلمة المرور الجديدة المرئية للمدير قبل الحفظ: ${editPassword.trim()}`
+                          : 'اضغط على أيقونة العين لمراجعة كلمة المرور الجديدة قبل الحفظ.'
+                        : 'يتم تشفير كلمة المرور الجديدة بآلية Hash الآمنة بعد الحفظ.'}
                     </span>
+                  </div>
+
+                  {/* 4. User Role (صلاحية المستخدم) */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-800 mb-1.5">
+                      صلاحية المستخدم (Role) *
+                    </label>
+                    <select
+                      value={editRole}
+                      onChange={(e) => {
+                        const nextRole = e.target.value as 'admin' | 'worker' | 'grocery';
+                        setEditRole(nextRole);
+                      }}
+                      className="w-full px-3 py-2.5 text-xs font-bold text-[#0c2461] bg-white border border-slate-300 rounded-xl focus:outline-none focus:border-[#0c2461]"
+                    >
+                      <option value="admin">مدير النظام (Admin)</option>
+                      <option value="worker">العامل الميداني (Worker)</option>
+                      <option value="grocery">صاحب البقالة (Store Owner)</option>
+                    </select>
+                  </div>
+
+                  {/* 5. Linked Grocery (البقالة المرتبطة به - يظهر عند اختيار صاحب البقالة) */}
+                  {editRole === 'grocery' && (
+                    <div>
+                      <label className="block text-xs font-bold text-slate-800 mb-1.5">
+                        البقالة المرتبطة به *
+                      </label>
+                      <select
+                        required
+                        value={editGroceryId}
+                        onChange={(e) => setEditGroceryId(e.target.value)}
+                        className="w-full px-3 py-2.5 text-xs font-bold text-[#0c2461] bg-white border border-slate-300 rounded-xl focus:outline-none focus:border-[#0c2461]"
+                      >
+                        <option value="">-- اختر البقالة المرتبطة بالحساب --</option>
+                        {groceries.map((g) => (
+                          <option key={g.id} value={g.id}>
+                            ({g.code}) {g.name} - {g.ownerName}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {/* 6. Account Status (حالة الحساب: نشط / غير نشط) */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-800 mb-1.5">
+                      حالة الحساب (نشط / غير نشط) *
+                    </label>
+                    <select
+                      value={editActive ? 'active' : 'inactive'}
+                      onChange={(e) => setEditActive(e.target.value === 'active')}
+                      className={`w-full px-3 py-2.5 text-xs font-bold bg-white border border-slate-300 rounded-xl focus:outline-none focus:border-[#0c2461] ${
+                        editActive ? 'text-[#009432]' : 'text-rose-700'
+                      }`}
+                    >
+                      <option value="active">نشط (مفعل للدخول)</option>
+                      <option value="inactive">غير نشط (معطل)</option>
+                    </select>
                   </div>
                 </div>
 
@@ -689,7 +812,7 @@ export const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
             {showAddUserModal && (
               <form onSubmit={handleCreateUser} className="bg-slate-50 p-4 rounded-2xl border border-slate-300 space-y-4">
                 <div className="text-xs font-bold text-[#0c2461]">
-                  بيانات المستخدم الجديد (عامل أو صاحب بقالة):
+                  بيانات المستخدم الجديد (مدير، عامل ميداني، أو صاحب بقالة):
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
@@ -723,33 +846,56 @@ export const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
                   </div>
 
                   <div>
-                    <label className="block text-xs font-medium text-slate-700 mb-1">الدور والصلاحية *</label>
+                    <label className="block text-xs font-medium text-slate-700 mb-1">صلاحية المستخدم (Role) *</label>
                     <select
                       value={newUserRole}
                       onChange={(e) => setNewUserRole(e.target.value as 'admin' | 'worker' | 'grocery')}
                       className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-xl focus:outline-none font-bold text-[#0c2461]"
                     >
-                      <option value="admin">مالك / مدير عام (كامل الصلاحيات والإدارة)</option>
-                      <option value="worker">عامل ميداني (تسجيل الشراء وفرز الصباح)</option>
-                      <option value="grocery">صاحب بقالة / عميل (قراءة حسابه وفواتيره فقط)</option>
+                      <option value="admin">مدير النظام (Admin)</option>
+                      <option value="worker">العامل الميداني (Worker)</option>
+                      <option value="grocery">صاحب البقالة (Store Owner)</option>
                     </select>
                   </div>
 
                   <div>
-                    <label className="block text-xs font-medium text-slate-700 mb-1">كلمة المرور (Password)</label>
-                    <input
-                      type="password"
-                      maxLength={32}
-                      placeholder="اتركه فارغاً ليصبح رقم المستخدم تلقائياً"
-                      value={newUserPin}
-                      onChange={(e) => setNewUserPin(e.target.value)}
-                      className="w-full px-3 py-2 text-xs font-mono font-bold text-center bg-white border border-slate-300 rounded-xl focus:outline-none"
-                    />
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-medium text-slate-700">كلمة المرور (Password)</label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const temp = AuthService.generateTemporaryPassword();
+                          setNewUserPin(temp);
+                          setShowNewUserPassword(true);
+                        }}
+                        className="text-[10px] font-bold text-[#0c2461] hover:underline cursor-pointer"
+                      >
+                        إنشاء مؤقتة
+                      </button>
+                    </div>
+                    <div className="relative flex items-center">
+                      <input
+                        type={showNewUserPassword ? 'text' : 'password'}
+                        maxLength={32}
+                        placeholder="اتركه فارغاً ليصبح رقم المستخدم تلقائياً"
+                        value={newUserPin}
+                        onChange={(e) => setNewUserPin(e.target.value)}
+                        className="w-full px-3 py-2 pl-8 text-xs font-mono font-bold bg-white border border-slate-300 rounded-xl focus:outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowNewUserPassword(!showNewUserPassword)}
+                        className="absolute left-2 text-slate-400 hover:text-slate-700 cursor-pointer"
+                        title={showNewUserPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
+                      >
+                        {showNewUserPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
                   </div>
 
                   {newUserRole === 'grocery' && (
                     <div className="sm:col-span-2">
-                      <label className="block text-xs font-medium text-slate-700 mb-1">ربط بالبقالة *</label>
+                      <label className="block text-xs font-medium text-slate-700 mb-1">البقالة المرتبطة به *</label>
                       <select
                         value={newUserGroceryId}
                         onChange={(e) => setNewUserGroceryId(e.target.value)}
@@ -845,12 +991,18 @@ export const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
                                 : 'bg-amber-100 text-amber-900'
                             }`}
                           >
-                            {u.role === 'admin' ? 'مدير النظام' : u.role === 'worker' ? 'عامل ميداني' : 'صاحب بقالة'}
+                            {getRoleLabelAr(u.role)}
                           </span>
                         </td>
 
                         <td className="p-3 text-slate-600">
-                          {linkedGrocery ? `(${linkedGrocery.code}) ${linkedGrocery.name}` : '-'}
+                          {u.role === 'grocery'
+                            ? linkedGrocery
+                              ? `(${linkedGrocery.code}) ${linkedGrocery.name}`
+                              : '-'
+                            : linkedGrocery
+                            ? <span className="text-[11px] text-slate-400" title="ارتباط بقالة محفوظ تاريخياً">- (محفوظ: {linkedGrocery.name})</span>
+                            : '-'}
                         </td>
 
                         <td className="p-3 text-center font-mono font-bold text-slate-600 bg-slate-100/60 rounded">
@@ -881,7 +1033,7 @@ export const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
                               type="button"
                               onClick={() => handleSelectUserToEdit(u)}
                               className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold text-[#0c2461] bg-[#0c2461]/10 hover:bg-[#0c2461] hover:text-white rounded-lg transition-colors cursor-pointer"
-                              title="تعديل اسم المستخدم أو رقم المستخدم أو كلمة المرور"
+                              title="تعديل بيانات المستخدم وصلاحياته وكلمة المرور"
                             >
                               <Edit3 className="w-3.5 h-3.5" />
                               <span>تعديل البيانات</span>
