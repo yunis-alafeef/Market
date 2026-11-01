@@ -840,11 +840,6 @@ function AppInner() {
     logAudit('حذف بقالة', g.name, g.code, 'محذوف');
   };
 
-  const handleResetData = () => {
-    StorageService.resetAllData();
-    window.location.reload();
-  };
-
   const handleLoginSuccess = (newSession: AuthSession) => {
     setSession(newSession);
     setIsLoginModalOpen(false);
@@ -998,7 +993,6 @@ function AppInner() {
               setSuppliers((prev) => prev.map((s) => (s.id === sup.id ? sup : s)))
             }
             onDeleteSupplier={handleDeleteSupplier}
-            onResetData={handleResetData}
           />
         )}
 

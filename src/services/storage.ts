@@ -1389,18 +1389,4 @@ export const StorageService = {
     }
     return changed;
   },
-
-  resetAllData(): void {
-    SYNC_KEYS.forEach((k) => {
-      delete lastSynced[k];
-      delete snapshot[k];
-      delete memCache[k];
-    });
-    void supabase.from('app_records').delete().in('collection', RECORD_KEYS).then(({ error }) => {
-      if (error) setSyncStatus({ error: describeError(error.message) });
-    });
-    void supabase.from('app_kv').delete().in('key', SYNC_KEYS).then(({ error }) => {
-      if (error) setSyncStatus({ error: describeError(error.message) });
-    });
-  },
 };

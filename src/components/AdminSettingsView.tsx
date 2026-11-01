@@ -21,7 +21,6 @@ import {
   Trash2,
   Check,
   Save,
-  RotateCcw,
   Search,
   Sliders,
   Users,
@@ -63,7 +62,6 @@ interface AdminSettingsViewProps {
   onAddSupplier: (supplier: Omit<Supplier, 'id' | 'balance' | 'active'>) => void;
   onUpdateSupplier: (supplier: Supplier) => void;
   onDeleteSupplier: (id: string) => void;
-  onResetData: () => void;
 }
 
 export const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
@@ -83,7 +81,6 @@ export const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
   onAddSupplier,
   onUpdateSupplier,
   onDeleteSupplier,
-  onResetData,
 }) => {
   // Tabs: 'users' | 'permissions' | 'groceries' | 'suppliers' | 'invoice_header' | 'themes' | 'audit_log' | 'supabase'
   const [activeTab, setActiveTab] = useState<
@@ -425,18 +422,6 @@ export const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
             </p>
           </div>
         </div>
-
-        <button
-          onClick={() => {
-            if (window.confirm('هل تود استعادة البيانات الافتراضية النظيفة للتطبيق؟')) {
-              onResetData();
-            }
-          }}
-          className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-xl transition-colors cursor-pointer"
-        >
-          <RotateCcw className="w-3.5 h-3.5" />
-          <span>استعادة الضبط النظيف</span>
-        </button>
       </div>
 
       {/* Settings Navigation Tabs */}
