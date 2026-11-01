@@ -371,7 +371,10 @@ export const InvoicePrintModal: React.FC<InvoicePrintModalProps> = ({
                     <div>
                       <span className="text-slate-500 font-medium">الرصيد المتبقي:</span>{' '}
                       <span className="font-black font-mono text-base text-[#0c2461] bg-[#f6b93b]/30 px-3 py-1 rounded-lg">
-                        {Math.abs(data.grocery?.balance || data.supplier?.balance || 0).toLocaleString()} ر.ي
+                        {(data.statementRows.length > 0
+                          ? data.statementRows[data.statementRows.length - 1].balance
+                          : Number(data.grocery?.balance ?? data.supplier?.balance ?? 0)
+                        ).toLocaleString()} ر.ي
                       </span>
                     </div>
                   </div>

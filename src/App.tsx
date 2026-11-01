@@ -290,24 +290,29 @@ function AppInner() {
     currentSheets.forEach((s) => {
       if (s.status === 'settled') {
         s.rows.forEach((r) => {
-          const unitCost = Number(r.costPrice) || 0;
+          const unitCost = Math.max(0, Number(r.costPrice) || 0);
+          let sumGroceryQty = 0;
           // Grocery amounts: (كمية البقالة من الصنف × سعر الشراء)
           Object.entries(r.quantities || {}).forEach(([gId, qVal]) => {
-            const q = Number(qVal) || 0;
-            if (q > 0 && unitCost > 0) {
-              const lineAmount = Math.round(q * unitCost * 100) / 100;
-              groceryPurchases[gId] = (groceryPurchases[gId] || 0) + lineAmount;
+            const q = Math.max(0, Number(qVal) || 0);
+            if (q > 0) {
+              sumGroceryQty += q;
+              if (unitCost > 0) {
+                const lineAmount = Math.round(q * unitCost * 100) / 100;
+                groceryPurchases[gId] = (groceryPurchases[gId] || 0) + lineAmount;
+              }
             }
           });
+          sumGroceryQty = Math.round(sumGroceryQty * 100) / 100;
           // Supplier amounts: (إجمالي كمية الصنف المشتراة × سعر الشراء)
           const cleanSupplierName = (r.supplierName || '').replace(' (مورد إضافي)', '').trim();
           const matchedSupplierId =
             r.supplierId ||
             suppliers.find((sup) => sup.name === r.supplierName || sup.name === cleanSupplierName)?.id ||
+            suppliers[0]?.id ||
             '';
-          if (matchedSupplierId) {
-            const sumGQty = Object.values(r.quantities || {}).reduce((acc, q) => acc + (Number(q) || 0), 0);
-            const rowQty = (Number(r.totalQuantity) || 0) > 0 ? Number(r.totalQuantity) : sumGQty;
+          if (matchedSupplierId && unitCost > 0) {
+            const rowQty = sumGroceryQty > 0 ? sumGroceryQty : Math.max(0, Number(r.totalQuantity) || 0);
             const lineCost = Math.round(rowQty * unitCost * 100) / 100;
             supplierPurchases[matchedSupplierId] = (supplierPurchases[matchedSupplierId] || 0) + lineCost;
           }
@@ -321,9 +326,9 @@ function AppInner() {
 
     currentVouchers.forEach((v) => {
       if (v.partyType === 'grocery' && v.type === 'receipt') {
-        groceryPaid[v.partyId] = (groceryPaid[v.partyId] || 0) + (Number(v.amount) || 0);
+        groceryPaid[v.partyId] = (groceryPaid[v.partyId] || 0) + Math.max(0, Number(v.amount) || 0);
       } else if (v.partyType === 'supplier' && v.type === 'payment') {
-        supplierPaid[v.partyId] = (supplierPaid[v.partyId] || 0) + (Number(v.amount) || 0);
+        supplierPaid[v.partyId] = (supplierPaid[v.partyId] || 0) + Math.max(0, Number(v.amount) || 0);
       }
     });
 
@@ -360,7 +365,7 @@ function AppInner() {
       const sumGQty = Math.round(
         Object.values(r.quantities || {}).reduce((acc, q) => acc + (Number(q) || 0), 0) * 100
       ) / 100;
-      const rowQty = (Number(r.totalQuantity) || 0) > 0 ? Number(r.totalQuantity) : sumGQty;
+      const rowQty = sumGQty > 0 ? sumGQty : Math.max(0, Number(r.totalQuantity) || 0);
       const unitCost = Math.max(0, Number(r.costPrice) || 0);
       const lineCost = Math.round(rowQty * unitCost * 100) / 100;
       return {
@@ -485,7 +490,7 @@ function AppInner() {
       const sumGQty = Math.round(
         Object.values(r.quantities || {}).reduce((acc, q) => acc + (Number(q) || 0), 0) * 100
       ) / 100;
-      const rowQty = (Number(r.totalQuantity) || 0) > 0 ? Number(r.totalQuantity) : sumGQty;
+      const rowQty = sumGQty > 0 ? sumGQty : Math.max(0, Number(r.totalQuantity) || 0);
       const unitCost = Math.max(0, Number(r.costPrice) || 0);
       const lineCost = Math.round(rowQty * unitCost * 100) / 100;
       return {

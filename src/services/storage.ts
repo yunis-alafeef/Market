@@ -321,18 +321,8 @@ export function getInitialDailySheets(): DailySheet[] {
 // Clean vouchers (empty by default for real operations)
 export const INITIAL_VOUCHERS: Voucher[] = [];
 
-// Clean initial audit log with system initialization
-export const INITIAL_AUDIT_LOGS: AuditLog[] = [
-  {
-    id: 'log_init',
-    timestamp: new Date().toLocaleDateString('en-CA') + ' ' + new Date().toTimeString().split(' ')[0],
-    user: 'يونس العفيف (مدير النظام)',
-    role: 'admin',
-    action: 'تهيئة النظام للإنتاج الفعلي',
-    target: 'قاعدة بيانات النظام',
-    details: 'تم تعيين يونس العفيف مديراً رئيسياً للنظام وإعداد كشف اليومية النظيف',
-  },
-];
+// Clean initial audit log (empty by default for clean financial testing)
+export const INITIAL_AUDIT_LOGS: AuditLog[] = [];
 
 export function loadFromStorage<T>(key: string, defaultValue: T): T {
   return key in memCache ? (memCache[key] as T) : defaultValue;
@@ -518,9 +508,31 @@ export const StorageService = {
   getDailySheets(): DailySheet[] {
     const effective = getEffectiveMarketDate();
     let sheets = loadFromStorage<DailySheet[]>(STORAGE_KEYS.DAILY_SHEETS, []);
+    const items = this.getItems();
+    const suppliers = this.getSuppliers();
+    const groceries = this.getGroceries();
 
     if (!Array.isArray(sheets) || sheets.length === 0) {
-      sheets = getInitialDailySheets();
+      const cleanRows = generateCleanRows(items, suppliers, groceries, effective.dateStr);
+      sheets = [
+        {
+          id: `sheet_${effective.dateStr}`,
+          date: effective.dateStr,
+          dayName: effective.dayName,
+          status: 'open',
+          rows: cleanRows,
+          totalCost: 0,
+          totalSale: 0,
+          totalProfit: 0,
+          notes: effective.isNightShift
+            ? `كشف اليومية الافتتاحي - وردية الليل لتجهيز مشتريات ${effective.dayName}`
+            : `كشف اليومية الافتتاحي ليوم ${effective.dayName}`,
+          nightOrdersSaved: false,
+          morningSortGenerated: false,
+          createdAt: `${effective.dateStr} 00:00:00`,
+          updatedAt: `${effective.dateStr} 00:00:00`,
+        },
+      ];
       saveToStorage(STORAGE_KEYS.DAILY_SHEETS, sheets);
       return sheets;
     }
@@ -530,9 +542,6 @@ export const StorageService = {
 
     if (!exists) {
       // Auto-create new sheet for the effective market date
-      const items = this.getItems();
-      const suppliers = this.getSuppliers();
-      const groceries = this.getGroceries();
       const cleanRows = generateCleanRows(items, suppliers, groceries, effective.dateStr);
 
       const effectiveSheet: DailySheet = {
@@ -555,6 +564,23 @@ export const StorageService = {
 
       sheets = [effectiveSheet, ...sheets];
       saveToStorage(STORAGE_KEYS.DAILY_SHEETS, sheets);
+    } else {
+      // If an open sheet has 0 rows while master items exist, populate clean rows
+      let updated = false;
+      sheets = sheets.map((s) => {
+        if (s.status !== 'settled' && (!s.rows || s.rows.length === 0) && items.length > 0) {
+          updated = true;
+          return {
+            ...s,
+            rows: generateCleanRows(items, suppliers, groceries, s.date),
+            totalCost: 0,
+            totalSale: 0,
+            totalProfit: 0,
+          };
+        }
+        return s;
+      });
+      if (updated) saveToStorage(STORAGE_KEYS.DAILY_SHEETS, sheets);
     }
 
     // Sort sheets by date descending so the latest date is always at the top

@@ -61,24 +61,95 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
 
   // Top Statistics
-  const todaySheet =
-    sheets.find((s) => s.status === 'settled' && (Number(s.totalCost) || 0) > 0) ||
-    sheets.find((s) => (Number(s.totalCost) || 0) > 0) ||
-    sheets[0] ||
-    sheets[sheets.length - 1];
-  const todayPurchases = todaySheet?.totalCost || 0;
-  const todaySales = todaySheet?.totalSale || 0;
+  // Card 1: "مشتريات اليوم التقديرية" = Current active open worksheet total: sum of (required item qty today * costPrice), returns to 0 immediately upon settling
+  const todaySheet = sheets.find((s) => s.status !== 'settled');
+  const todayPurchases = todaySheet
+    ? Math.round(
+        todaySheet.rows.reduce((sum, r) => {
+          const sumGQty = Object.values(r.quantities || {}).reduce((acc, q) => acc + (Number(q) || 0), 0);
+          const rowQty = sumGQty > 0 ? sumGQty : Math.max(0, Number(r.totalQuantity) || 0);
+          const unitCost = Math.max(0, Number(r.costPrice) || 0);
+          return sum + Math.round(rowQty * unitCost * 100) / 100;
+        }, 0) * 100
+      ) / 100
+    : 0;
+  const todaySales = todayPurchases;
 
-  // Total grocery debt (receivables: exact sum of current actual balances of all groceries)
-  const totalGroceryDebt = Math.round(
-    groceries.reduce((sum, g) => sum + (Number(g.balance) || 0), 0) * 100
-  ) / 100;
-  // Total supplier debt (payables: exact sum of current actual balances of all suppliers)
-  const totalSupplierDebt = Math.round(
-    suppliers.reduce((sum, s) => sum + (Number(s.balance) || 0), 0) * 100
-  ) / 100;
-  // Net Working Balance = ذمم البقالات - مستحقات الموردين
-  const netBalance = Math.round((totalGroceryDebt - totalSupplierDebt) * 100) / 100;
+  // Dynamic ledger totals from settled sheets and vouchers (guarantees 100% mathematical precision and prevents stale/inverted sign balances)
+  const { groceryBalancesMap, supplierBalancesMap, totalGroceryDebt, totalSupplierDebt, netBalance } = useMemo(() => {
+    const gMap: Record<string, number> = {};
+    const sMap: Record<string, number> = {};
+
+    groceries.forEach((g) => {
+      gMap[g.id] = 0;
+    });
+    suppliers.forEach((s) => {
+      sMap[s.id] = 0;
+    });
+
+    // 1. Add settled sheets:
+    // - Grocery balance += (grocery qty * costPrice)
+    // - Supplier balance += (total item qty * costPrice)
+    sheets.forEach((s) => {
+      if (s.status === 'settled') {
+        s.rows.forEach((r) => {
+          const unitCost = Math.max(0, Number(r.costPrice) || 0);
+          let sumGroceryQty = 0;
+          Object.entries(r.quantities || {}).forEach(([gId, qVal]) => {
+            const q = Math.max(0, Number(qVal) || 0);
+            if (q > 0) {
+              sumGroceryQty += q;
+              if (unitCost > 0) {
+                const lineAmount = Math.round(q * unitCost * 100) / 100;
+                gMap[gId] = Math.round(((gMap[gId] || 0) + lineAmount) * 100) / 100;
+              }
+            }
+          });
+          sumGroceryQty = Math.round(sumGroceryQty * 100) / 100;
+
+          const cleanSupplierName = (r.supplierName || '').replace(' (مورد إضافي)', '').trim();
+          const matchedSupplierId =
+            r.supplierId ||
+            suppliers.find((sup) => sup.name === r.supplierName || sup.name === cleanSupplierName)?.id ||
+            suppliers[0]?.id ||
+            '';
+          if (matchedSupplierId && unitCost > 0) {
+            const rowQty = sumGroceryQty > 0 ? sumGroceryQty : Math.max(0, Number(r.totalQuantity) || 0);
+            const lineCost = Math.round(rowQty * unitCost * 100) / 100;
+            sMap[matchedSupplierId] = Math.round(((sMap[matchedSupplierId] || 0) + lineCost) * 100) / 100;
+          }
+        });
+      }
+    });
+
+    // 2. Subtract vouchers:
+    // - Grocery receipt voucher reduces grocery debt: gMap[gId] -= amount
+    // - Supplier payment voucher reduces supplier debt: sMap[sId] -= amount
+    vouchers.forEach((v) => {
+      const amt = Math.max(0, Number(v.amount) || 0);
+      if (v.partyType === 'grocery' && v.type === 'receipt') {
+        gMap[v.partyId] = Math.round(((gMap[v.partyId] || 0) - amt) * 100) / 100;
+      } else if (v.partyType === 'supplier' && v.type === 'payment') {
+        sMap[v.partyId] = Math.round(((sMap[v.partyId] || 0) - amt) * 100) / 100;
+      }
+    });
+
+    const totGrocery = Math.round(
+      groceries.reduce((sum, g) => sum + (gMap[g.id] ?? 0), 0) * 100
+    ) / 100;
+    const totSupplier = Math.round(
+      suppliers.reduce((sum, s) => sum + (sMap[s.id] ?? 0), 0) * 100
+    ) / 100;
+    const net = Math.round((totGrocery - totSupplier) * 100) / 100;
+
+    return {
+      groceryBalancesMap: gMap,
+      supplierBalancesMap: sMap,
+      totalGroceryDebt: totGrocery,
+      totalSupplierDebt: totSupplier,
+      netBalance: net,
+    };
+  }, [sheets, vouchers, groceries, suppliers]);
 
   // Generate detailed statement rows for a grocery
   const getGroceryStatement = (groceryId: string) => {
@@ -413,11 +484,14 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                   onChange={(e) => setSelectedGroceryId(e.target.value)}
                   className="px-3 py-2 text-sm font-bold bg-white border border-slate-300 rounded-xl focus:outline-none"
                 >
-                  {groceries.map((g) => (
-                    <option key={g.id} value={g.id}>
-                      ({g.code}) {g.name} - الرصيد: {g.balance.toLocaleString()} ر.ي
-                    </option>
-                  ))}
+                  {groceries.map((g) => {
+                    const actualBal = groceryBalancesMap[g.id] ?? 0;
+                    return (
+                      <option key={g.id} value={g.id}>
+                        ({g.code}) {g.name} - الرصيد: {actualBal.toLocaleString()} ر.ي
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
 
@@ -434,7 +508,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                   <button
                     onClick={() =>
                       onOpenPrintModal('statement', {
-                        grocery: selectedGrocery,
+                        grocery: { ...selectedGrocery, balance: groceryBalancesMap[selectedGrocery.id] ?? 0 },
                         statementRows: displayedGroceryStatement,
                       })
                     }
@@ -558,11 +632,14 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                   onChange={(e) => setSelectedSupplierId(e.target.value)}
                   className="px-3 py-2 text-sm font-bold bg-white border border-slate-300 rounded-xl focus:outline-none"
                 >
-                  {suppliers.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name} - المستحق له: {s.balance.toLocaleString()} ر.ي
-                    </option>
-                  ))}
+                  {suppliers.map((s) => {
+                    const actualBal = supplierBalancesMap[s.id] ?? 0;
+                    return (
+                      <option key={s.id} value={s.id}>
+                        {s.name} - المستحق له: {actualBal.toLocaleString()} ر.ي
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
 
@@ -579,7 +656,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                   <button
                     onClick={() =>
                       onOpenPrintModal('statement', {
-                        supplier: selectedSupplier,
+                        supplier: { ...selectedSupplier, balance: supplierBalancesMap[selectedSupplier.id] ?? 0 },
                         statementRows: displayedSupplierStatement,
                       })
                     }

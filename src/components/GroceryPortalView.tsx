@@ -144,6 +144,7 @@ export const GroceryPortalView: React.FC<GroceryPortalViewProps> = ({
   };
 
   const statementRows = getStatementRows();
+  const actualBalance = statementRows.length > 0 ? statementRows[statementRows.length - 1].balance : 0;
 
   // Date Filter State for Grocery Statement (Requirement 5)
   const [statementStartDate, setStatementStartDate] = useState<string>('');
@@ -231,7 +232,7 @@ export const GroceryPortalView: React.FC<GroceryPortalViewProps> = ({
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
           <span className="text-xs text-slate-500 block mb-1">الرصيد الحالي المستحق عليك</span>
           <div className="text-2xl font-black font-mono text-[#0c2461] tabular-nums">
-            {selectedGrocery.balance.toLocaleString()}{' '}
+            {actualBalance.toLocaleString()}{' '}
             <span className="text-xs font-normal text-slate-600">ر.ي</span>
           </div>
           <div className="text-[11px] text-slate-400 mt-2">
@@ -257,7 +258,7 @@ export const GroceryPortalView: React.FC<GroceryPortalViewProps> = ({
           <div className="flex items-center gap-2 mt-1">
             <span className="text-base font-bold text-[#009432]">نشط وموثق</span>
             <span className="text-xs bg-[#f6b93b]/20 text-[#0c2461] font-bold px-2 py-0.5 rounded-full">
-              نسبة الائتمان: {Math.min(100, Math.round((selectedGrocery.balance / selectedGrocery.creditLimit) * 100))}%
+              نسبة الائتمان: {Math.max(0, Math.min(100, Math.round((actualBalance / (selectedGrocery.creditLimit || 1)) * 100)))}%
             </span>
           </div>
           <div className="text-[11px] text-slate-400 mt-2">
@@ -297,12 +298,12 @@ export const GroceryPortalView: React.FC<GroceryPortalViewProps> = ({
               onClick={() => {
                 if (activeTab === 'today_delivery' && todaySheet) {
                   onOpenPrintModal('morning_sort', {
-                    grocery: selectedGrocery,
+                    grocery: { ...selectedGrocery, balance: actualBalance },
                     sheet: todaySheet,
                   });
                 } else {
                   onOpenPrintModal('statement', {
-                    grocery: selectedGrocery,
+                    grocery: { ...selectedGrocery, balance: actualBalance },
                     statementRows: displayedStatementRows,
                   });
                 }

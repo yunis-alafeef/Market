@@ -298,7 +298,7 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
       const sumGroceryQty = Math.round(
         Object.values(r.quantities || {}).reduce((acc, q) => acc + (Number(q) || 0), 0) * 100
       ) / 100;
-      const totalQuantity = Math.max(Number(r.totalQuantity) || 0, sumGroceryQty);
+      const totalQuantity = sumGroceryQty > 0 ? sumGroceryQty : Math.max(0, Number(r.totalQuantity) || 0);
       const costPrice = Math.max(0, Number(r.costPrice) || 0);
       const totalCost = Math.round(totalQuantity * costPrice * 100) / 100;
       return {
@@ -380,7 +380,7 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
       const sumGroceryQty = Math.round(
         Object.values(r.quantities || {}).reduce((acc, q) => acc + (Number(q) || 0), 0) * 100
       ) / 100;
-      const totalQuantity = (Number(r.totalQuantity) || 0) > 0 ? Number(r.totalQuantity) : sumGroceryQty;
+      const totalQuantity = sumGroceryQty > 0 ? sumGroceryQty : Math.max(0, Number(r.totalQuantity) || 0);
       const costPrice = Math.max(0, Number(r.costPrice) || 0);
       const totalCost = Math.round(totalQuantity * costPrice * 100) / 100;
       return {
