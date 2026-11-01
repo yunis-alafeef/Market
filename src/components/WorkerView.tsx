@@ -7,6 +7,7 @@ import {
   VegetableItem,
   SystemSettings,
 } from '../types';
+import { getYemenNow, extractTime12 } from '../services/storage';
 import {
   Save,
   Plus,
@@ -280,31 +281,48 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
     recalculateAndSave(newRows);
   };
 
-  // Delete Row
+  // Delete Row (Immediate deletion of the selected row and direct totals recalculation)
   const handleDeleteRow = (rowId: string) => {
+    if (isLocked) return;
     const target = sheet.rows.find((r) => r.id === rowId);
     if (!target) return;
 
-    if (window.confirm(`هل أنت متأكد من حذف صنف (${target.itemName}) من الكشف؟`)) {
-      const newRows = sheet.rows.filter((r) => r.id !== rowId);
-      onAddAuditLog('حذف سطر صنف', target.itemName, `${target.totalQuantity} ${target.unit}`, 'محذوف');
-      recalculateAndSave(newRows);
-    }
+    const newRows = sheet.rows.filter((r) => r.id !== rowId);
+    onAddAuditLog('حذف سطر صنف', target.itemName, `${target.totalQuantity} ${target.unit}`, 'محذوف');
+    recalculateAndSave(newRows);
   };
 
   // Recalculate sheet totals
   const recalculateAndSave = (newRows: DailyOrderRow[]) => {
-    const totalCost = Math.round(newRows.reduce((sum, r) => sum + (Number(r.totalCost) || 0), 0) * 100) / 100;
-    const totalSale = Math.round(newRows.reduce((sum, r) => sum + (Number(r.totalSale) || 0), 0) * 100) / 100;
-    const totalProfit = Math.round((totalSale - totalCost) * 100) / 100;
+    const normalizedRows = newRows.map((r) => {
+      const sumGroceryQty = Math.round(
+        Object.values(r.quantities || {}).reduce((acc, q) => acc + (Number(q) || 0), 0) * 100
+      ) / 100;
+      const totalQuantity = Math.max(Number(r.totalQuantity) || 0, sumGroceryQty);
+      const costPrice = Math.max(0, Number(r.costPrice) || 0);
+      const totalCost = Math.round(totalQuantity * costPrice * 100) / 100;
+      return {
+        ...r,
+        costPrice,
+        salePrice: costPrice,
+        totalQuantity,
+        totalCost,
+        totalSale: totalCost,
+        profit: 0,
+      };
+    });
+
+    const totalCost = Math.round(normalizedRows.reduce((sum, r) => sum + (Number(r.totalCost) || 0), 0) * 100) / 100;
+    const totalSale = totalCost;
+    const totalProfit = 0;
 
     onUpdateSheet({
       ...sheet,
-      rows: newRows,
+      rows: normalizedRows,
       totalCost,
       totalSale,
       totalProfit,
-      updatedAt: new Date().toLocaleTimeString('ar-SA'),
+      updatedAt: `${getYemenNow().dateStr} ${getYemenNow().time12}`,
     });
   };
 
@@ -331,7 +349,7 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
       nightOrdersSaved: true,
       morningSortGenerated: true,
       status: 'saved_night',
-      updatedAt: new Date().toLocaleTimeString('ar-SA'),
+      updatedAt: `${getYemenNow().dateStr} ${getYemenNow().time12}`,
     };
 
     onUpdateSheet(updatedSheet);
@@ -356,10 +374,28 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
     alert('✅ [🌙 تم حفظ طلبات الليل وتثبيت الجدول السفلي وبطاقات الفرز بنجاح!]');
   };
 
-  // Settle and transfer purchases handler with strict zero-value validation
-  const handleSettleAndReset = () => {
-    // 1. Identify all items with ordered quantities
-    const activeOrderRows = sheet.rows.filter((r) => {
+  // Validate required prices before settling or saving manager edit
+  const validateAndNormalizeSheetForSettle = (): DailySheet | null => {
+    const normalizedRows = sheet.rows.map((r) => {
+      const sumGroceryQty = Math.round(
+        Object.values(r.quantities || {}).reduce((acc, q) => acc + (Number(q) || 0), 0) * 100
+      ) / 100;
+      const totalQuantity = (Number(r.totalQuantity) || 0) > 0 ? Number(r.totalQuantity) : sumGroceryQty;
+      const costPrice = Math.max(0, Number(r.costPrice) || 0);
+      const totalCost = Math.round(totalQuantity * costPrice * 100) / 100;
+      return {
+        ...r,
+        costPrice,
+        salePrice: costPrice,
+        totalQuantity,
+        totalCost,
+        totalSale: totalCost,
+        profit: 0,
+      };
+    });
+
+    // 1. Identify all items with ordered quantities (totalQuantity > 0)
+    const activeOrderRows = normalizedRows.filter((r) => {
       const qTotal = Number(r.totalQuantity) || 0;
       const anyGroceryQty = Object.values(r.quantities || {}).some((q) => (Number(q) || 0) > 0);
       return qTotal > 0 || anyGroceryQty;
@@ -367,24 +403,39 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
 
     if (activeOrderRows.length === 0) {
       alert('⚠️ الكشف فارغ تماماً من أي كميات مسجلة! يرجى إدخال كميات البقالات أولاً قبل الترحيل.');
-      return;
+      return null;
     }
 
-    // 2. Strict Check: Reject settling if any active item has costPrice <= 0
+    // 2. Mandatory Price Check: Stop immediately if any required item has costPrice <= 0
     const zeroPriceItems = activeOrderRows.filter(
-      (r) => (Number(r.costPrice) || 0) <= 0
+      (r) => !r.costPrice || (Number(r.costPrice) || 0) <= 0
     );
 
     if (zeroPriceItems.length > 0) {
-      const detailsList = zeroPriceItems
-        .map((r) => `• ${r.itemName} (${r.unit}): كمية [${r.totalQuantity}] - سعر الشراء: [${r.costPrice || 0} ر.ي]`)
-        .join('\n');
-
+      const firstMissing = zeroPriceItems[0];
+      const names = zeroPriceItems.map((r) => r.itemName).join('، ');
       alert(
-        `⛔ لا يمكن ترحيل الحسابات وسعر الشراء لا زال صفراً!\n\nيوجد (${zeroPriceItems.length}) منتجات مطلوبة ولكن سعر شرائها ما زال صفراً:\n\n${detailsList}\n\nيرجى تعبئة الفراغ وتحديد سعر الشراء لكل صنف أعلاه قبل إتمام الترحيل.`
+        zeroPriceItems.length === 1
+          ? `⚠️ يرجى كتابة سعر الصنف [${firstMissing.itemName}] قبل ترحيل الحسابات!`
+          : `⚠️ يرجى كتابة سعر الصنف [${names}] قبل ترحيل الحسابات!`
       );
-      return;
+      return null;
     }
+
+    const totalCost = Math.round(normalizedRows.reduce((sum, r) => sum + (Number(r.totalCost) || 0), 0) * 100) / 100;
+    return {
+      ...sheet,
+      rows: normalizedRows,
+      totalCost,
+      totalSale: totalCost,
+      totalProfit: 0,
+    };
+  };
+
+  // Settle and transfer purchases handler with strict zero-value validation
+  const handleSettleAndReset = () => {
+    const validatedSheet = validateAndNormalizeSheetForSettle();
+    if (!validatedSheet) return;
 
     // 3. Confirm and Settle
     if (
@@ -396,7 +447,17 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
     }
 
     if (onSettleSheet) {
-      onSettleSheet(sheet);
+      onSettleSheet(validatedSheet);
+    }
+  };
+
+  // Manager Save Edit & Resettle handler with price validation
+  const handleManagerSaveAndResettleClick = () => {
+    const validatedSheet = validateAndNormalizeSheetForSettle();
+    if (!validatedSheet) return;
+
+    if (onSaveManagerEditAndResettle) {
+      onSaveManagerEditAndResettle(validatedSheet);
     }
   };
 
@@ -473,7 +534,7 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
           <div className="flex items-center gap-2.5">
             <button
               type="button"
-              onClick={() => onSaveManagerEditAndResettle && onSaveManagerEditAndResettle(sheet)}
+              onClick={handleManagerSaveAndResettleClick}
               className="flex items-center gap-2 px-5 py-2.5 text-xs sm:text-sm font-black text-slate-900 bg-gradient-to-r from-amber-400 to-yellow-400 hover:from-amber-300 hover:to-yellow-300 rounded-xl transition-all shadow-md cursor-pointer active:scale-95 whitespace-nowrap"
             >
               <Save className="w-4 h-4 text-slate-900" />
@@ -504,8 +565,13 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
               <h2 className="text-base sm:text-lg font-black text-slate-900 whitespace-nowrap">
                 كشف اليومية: {sheet.dayName}
               </h2>
-              <span className="text-xs font-mono bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md font-bold whitespace-nowrap">
-                {sheet.date}
+              <span className="text-xs font-mono bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md font-bold whitespace-nowrap inline-flex items-baseline gap-1.5">
+                <span>{sheet.date}</span>
+                {extractTime12(sheet.updatedAt, sheet.createdAt) && (
+                  <span className="text-[10px] text-slate-500 font-normal">
+                    {extractTime12(sheet.updatedAt, sheet.createdAt)}
+                  </span>
+                )}
               </span>
               {sheet.notes?.includes('وردية الليل') && (
                 <span className="text-xs bg-indigo-50 text-indigo-700 font-bold px-2 py-0.5 rounded-full flex items-center gap-1 whitespace-nowrap">
@@ -957,28 +1023,17 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
                         </div>
                       </div>
 
-                      {/* Card Footer Actions: Duplicate (+) and Delete */}
-                      <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+                      {/* Card Footer Actions: Delete */}
+                      <div className="pt-2 border-t border-slate-100 flex items-center justify-end text-xs text-slate-500">
                         <button
                           type="button"
-                          onClick={() => handleDuplicateRow(row.id)}
-                          className="flex items-center gap-1 text-[#006266] hover:text-[#004e51] font-bold py-1 px-2 rounded-lg hover:bg-[#006266]/10 cursor-pointer"
-                          title="شراء نفس الصنف من مورد آخر بسعر مختلف"
+                          disabled={isLocked}
+                          onClick={() => handleDeleteRow(row.id)}
+                          className="p-1.5 text-rose-600 hover:text-white hover:bg-rose-600 bg-rose-50 rounded-lg transition-colors cursor-pointer disabled:opacity-40"
+                          title="حذف الصنف"
                         >
-                          <Copy className="w-3.5 h-3.5" />
-                          <span>تكرار لمورد آخر (+)</span>
+                          <Trash2 className="w-4 h-4" />
                         </button>
-
-                        {sheet.rows.length >= 1 && (
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteRow(row.id)}
-                            className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 cursor-pointer"
-                            title="حذف الصنف"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        )}
                       </div>
                     </div>
                   );
@@ -1168,11 +1223,12 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
                           <div className="flex items-center justify-center gap-1">
                             <button
                               type="button"
-                              onClick={() => handleDuplicateRow(row.id)}
-                              className="p-1 text-slate-600 hover:text-white hover:bg-[#006266] rounded cursor-pointer"
-                              title="تكرار السطر"
+                              disabled={isLocked}
+                              onClick={() => handleDeleteRow(row.id)}
+                              className="p-1.5 text-rose-600 hover:text-white hover:bg-rose-600 bg-rose-50 rounded-lg transition-colors cursor-pointer disabled:opacity-40"
+                              title="حذف الصنف"
                             >
-                              <Copy className="w-3.5 h-3.5" />
+                              <Trash2 className="w-4 h-4" />
                             </button>
                           </div>
                         </td>

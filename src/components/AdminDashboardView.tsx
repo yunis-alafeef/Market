@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { DailySheet, Grocery, Supplier, Voucher, SystemSettings } from '../types';
+import { extractTime12 } from '../services/storage';
 import {
   DollarSign,
   TrendingUp,
@@ -31,6 +32,7 @@ interface AdminDashboardViewProps {
       voucher?: Voucher;
       statementRows?: {
         date: string;
+        time?: string | null;
         description: string;
         debit: number;
         credit: number;
@@ -59,16 +61,24 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
 
   // Top Statistics
-  const todaySheet = sheets[0] || sheets[sheets.length - 1];
+  const todaySheet =
+    sheets.find((s) => s.status === 'settled' && (Number(s.totalCost) || 0) > 0) ||
+    sheets.find((s) => (Number(s.totalCost) || 0) > 0) ||
+    sheets[0] ||
+    sheets[sheets.length - 1];
   const todayPurchases = todaySheet?.totalCost || 0;
   const todaySales = todaySheet?.totalSale || 0;
 
-  // Total grocery debt (receivables: our money with groceries)
-  const totalGroceryDebt = groceries.reduce((sum, g) => sum + Math.max(0, g.balance), 0);
-  // Total supplier debt (payables: money we owe to suppliers)
-  const totalSupplierDebt = suppliers.reduce((sum, s) => sum + Math.max(0, s.balance), 0);
-  // Net Working Balance
-  const netBalance = totalGroceryDebt - totalSupplierDebt;
+  // Total grocery debt (receivables: exact sum of current actual balances of all groceries)
+  const totalGroceryDebt = Math.round(
+    groceries.reduce((sum, g) => sum + (Number(g.balance) || 0), 0) * 100
+  ) / 100;
+  // Total supplier debt (payables: exact sum of current actual balances of all suppliers)
+  const totalSupplierDebt = Math.round(
+    suppliers.reduce((sum, s) => sum + (Number(s.balance) || 0), 0) * 100
+  ) / 100;
+  // Net Working Balance = ذمم البقالات - مستحقات الموردين
+  const netBalance = Math.round((totalGroceryDebt - totalSupplierDebt) * 100) / 100;
 
   // Generate detailed statement rows for a grocery
   const getGroceryStatement = (groceryId: string) => {
@@ -77,6 +87,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
 
     const rows: {
       date: string;
+      time?: string | null;
       description: string;
       debit: number;
       credit: number;
@@ -103,6 +114,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       if (totalAmount > 0) {
         rows.push({
           date: sheet.date,
+          time: extractTime12(sheet.updatedAt, sheet.createdAt),
           description: `مسحوبات خضروات كشف ${sheet.dayName} (${items.length} أصناف)`,
           debit: totalAmount,
           credit: 0,
@@ -118,6 +130,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     groceryVouchers.forEach((v) => {
       rows.push({
         date: v.date,
+        time: extractTime12(v.createdAt),
         description: `سند قبض رقم ${v.voucherNumber} (${v.notes}) - ${v.paymentMethod === 'cash' ? 'نقداً' : 'تحويل'}`,
         debit: 0,
         credit: Number(v.amount) || 0,
@@ -139,6 +152,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
 
     const rows: {
       date: string;
+      time?: string | null;
       description: string;
       debit: number;
       credit: number;
@@ -153,16 +167,26 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       .sort((a, b) => a.date.localeCompare(b.date));
 
     sortedSettled.forEach((sheet) => {
-      const items = sheet.rows.filter(
-        (r) => r.supplierId === supplierId || (!r.supplierId && r.supplierName === s.name)
-      );
+      const items = sheet.rows.filter((r) => {
+        const cleanSupplierName = (r.supplierName || '').replace(' (مورد إضافي)', '').trim();
+        return (
+          r.supplierId === supplierId ||
+          (!r.supplierId && (r.supplierName === s.name || cleanSupplierName === s.name))
+        );
+      });
       const totalCost = Math.round(
-        items.reduce((sum, r) => sum + (Number(r.totalCost) || 0), 0) * 100
+        items.reduce((sum, r) => {
+          const sumGQty = Object.values(r.quantities || {}).reduce((acc, q) => acc + (Number(q) || 0), 0);
+          const rowQty = (Number(r.totalQuantity) || 0) > 0 ? Number(r.totalQuantity) : sumGQty;
+          const unitCost = Number(r.costPrice) || 0;
+          return sum + Math.round(rowQty * unitCost * 100) / 100;
+        }, 0) * 100
       ) / 100;
 
       if (totalCost > 0) {
         rows.push({
           date: sheet.date,
+          time: extractTime12(sheet.updatedAt, sheet.createdAt),
           description: `توريد خضار كشف ${sheet.dayName} (${items.map((i) => i.itemName).join('، ')})`,
           debit: totalCost,
           credit: 0,
@@ -178,6 +202,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     supplierVouchers.forEach((v) => {
       rows.push({
         date: v.date,
+        time: extractTime12(v.createdAt),
         description: `سند صرف رقم ${v.voucherNumber} (${v.notes})`,
         debit: 0,
         credit: Number(v.amount) || 0,
@@ -494,7 +519,16 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                         idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/60'
                       }`}
                     >
-                      <td className="p-2.5 font-mono text-slate-600">{row.date}</td>
+                      <td className="p-2.5 font-mono text-slate-600 whitespace-nowrap">
+                        <span className="inline-flex items-baseline gap-1.5">
+                          <span>{row.date}</span>
+                          {row.time && (
+                            <span className="text-[10px] text-slate-400 font-normal">
+                              {row.time}
+                            </span>
+                          )}
+                        </span>
+                      </td>
                       <td className="p-2.5 font-medium text-slate-900">{row.description}</td>
                       <td className="p-2.5 text-center font-mono tabular-nums text-slate-800">
                         {row.debit > 0 ? `${row.debit.toLocaleString()} ر.ي` : '-'}
@@ -630,7 +664,16 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                         idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/60'
                       }`}
                     >
-                      <td className="p-2.5 font-mono text-slate-600">{row.date}</td>
+                      <td className="p-2.5 font-mono text-slate-600 whitespace-nowrap">
+                        <span className="inline-flex items-baseline gap-1.5">
+                          <span>{row.date}</span>
+                          {row.time && (
+                            <span className="text-[10px] text-slate-400 font-normal">
+                              {row.time}
+                            </span>
+                          )}
+                        </span>
+                      </td>
                       <td className="p-2.5 font-medium text-slate-900">{row.description}</td>
                       <td className="p-2.5 text-center font-mono tabular-nums text-slate-800">
                         {row.debit > 0 ? `${row.debit.toLocaleString()} ر.ي` : '-'}
@@ -702,7 +745,16 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                             {voucher.type === 'receipt' ? 'سند قبض' : 'سند صرف'}
                           </span>
                         </td>
-                        <td className="p-2.5 font-mono text-slate-600">{voucher.date}</td>
+                        <td className="p-2.5 font-mono text-slate-600 whitespace-nowrap">
+                          <span className="inline-flex items-baseline gap-1.5">
+                            <span>{voucher.date}</span>
+                            {extractTime12(voucher.createdAt) && (
+                              <span className="text-[10px] text-slate-400 font-normal">
+                                {extractTime12(voucher.createdAt)}
+                              </span>
+                            )}
+                          </span>
+                        </td>
                         <td className="p-2.5 font-bold text-slate-900">{voucher.partyName}</td>
                         <td className="p-2.5 text-center font-mono font-bold text-sm text-[#0c2461] tabular-nums">
                           {voucher.amount.toLocaleString()} ر.ي

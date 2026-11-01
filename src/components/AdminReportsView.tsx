@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { DailySheet, SystemSettings, Grocery, Supplier } from '../types';
+import { extractTime12 } from '../services/storage';
 import {
   Calendar,
   Edit3,
@@ -41,20 +42,29 @@ export const AdminReportsView: React.FC<AdminReportsViewProps> = ({
   onEditDayComprehensive,
   onOpenPrintModal,
 }) => {
-  // Sort sheets descending by date
+  // Sort sheets descending by date (preserve all settled sheets with data, and never let an empty open sheet shadow a settled sheet)
   const sortedSheets = useMemo(() => {
-    const byDate = new Map<string, DailySheet>();
+    const settledWithData = dailySheets.filter(
+      (s) => s.status === 'settled' && ((Number(s.totalCost) || 0) > 0 || s.rows.some((r) => (Number(r.totalQuantity) || 0) > 0))
+    );
+    const settledDates = new Set(settledWithData.map((s) => s.date));
+
+    const openOrDraftByDate = new Map<string, DailySheet>();
     for (const s of dailySheets) {
-      const existing = byDate.get(s.date);
-      if (!existing || (s.status === 'settled' && existing.status !== 'settled')) {
-        byDate.set(s.date, s);
+      if (settledDates.has(s.date)) continue;
+      const existing = openOrDraftByDate.get(s.date);
+      if (!existing || (Number(s.totalCost) || 0) > (Number(existing.totalCost) || 0)) {
+        openOrDraftByDate.set(s.date, s);
       }
     }
-    return Array.from(byDate.values()).sort((a, b) => b.date.localeCompare(a.date));
+
+    const combined = [...settledWithData, ...Array.from(openOrDraftByDate.values())];
+    if (combined.length === 0) return [...dailySheets].sort((a, b) => b.date.localeCompare(a.date));
+    return combined.sort((a, b) => b.date.localeCompare(a.date) || String(b.id).localeCompare(String(a.id)));
   }, [dailySheets]);
 
-  // Current selected day for detailed single-day inspection
-  const [selectedDate, setSelectedDate] = useState<string>(sortedSheets[0]?.date || '');
+  // Current selected sheet (by ID or date) for detailed single-day inspection
+  const [selectedDate, setSelectedDate] = useState<string>(sortedSheets[0]?.id || sortedSheets[0]?.date || '');
   const [filterQuery, setFilterQuery] = useState<string>('');
 
   // Search single day by date
@@ -66,9 +76,12 @@ export const AdminReportsView: React.FC<AdminReportsViewProps> = ({
       setSearchDayNotice('يرجى اختيار تاريخ للبحث');
       return;
     }
-    const found = dailySheets.find((s) => s.date === searchDayDate);
+    const found =
+      sortedSheets.find((s) => s.date === searchDayDate) ||
+      dailySheets.find((s) => s.date === searchDayDate && s.status === 'settled') ||
+      dailySheets.find((s) => s.date === searchDayDate);
     if (found) {
-      setSelectedDate(found.date);
+      setSelectedDate(found.id);
       setSearchDayNotice(`✅ تم إظهار كشف ${found.dayName} (${found.date}) بنجاح`);
     } else {
       setSearchDayNotice(`⚠️ لا يوجد كشف مسجل بتاريخ ${searchDayDate}`);
@@ -240,8 +253,11 @@ export const AdminReportsView: React.FC<AdminReportsViewProps> = ({
     };
   }, [filteredPeriodSheets, groceries]);
 
-  // Selected single sheet
+  // Selected single sheet (prefer exact ID match or settled sheet from sortedSheets so an empty open sheet never shadows a settled day)
   const currentSheet =
+    sortedSheets.find((s) => s.id === selectedDate || s.date === selectedDate) ||
+    dailySheets.find((s) => s.id === selectedDate) ||
+    dailySheets.find((s) => s.date === selectedDate && s.status === 'settled') ||
     dailySheets.find((s) => s.date === selectedDate) ||
     filteredPeriodSheets[0] ||
     sortedSheets[0] ||
@@ -502,11 +518,11 @@ export const AdminReportsView: React.FC<AdminReportsViewProps> = ({
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3">
             {filteredPeriodSheets.map((sheet) => {
-              const isSelected = sheet.date === currentSheet?.date;
+              const isSelected = sheet.id === currentSheet?.id;
               return (
                 <button
                   key={sheet.id}
-                  onClick={() => setSelectedDate(sheet.date)}
+                  onClick={() => setSelectedDate(sheet.id)}
                   className={`p-3.5 rounded-xl border text-right transition-all cursor-pointer relative overflow-hidden ${
                     isSelected
                       ? 'bg-[#0c2461] text-white border-[#0c2461] shadow-md ring-2 ring-[#f6b93b]/50'
@@ -532,11 +548,20 @@ export const AdminReportsView: React.FC<AdminReportsViewProps> = ({
                     )}
                   </div>
                   <div
-                    className={`text-xs font-mono mb-2 tabular-nums ${
+                    className={`text-xs font-mono mb-2 tabular-nums inline-flex items-baseline gap-1.5 whitespace-nowrap ${
                       isSelected ? 'text-slate-200' : 'text-slate-500'
                     }`}
                   >
-                    {sheet.date}
+                    <span>{sheet.date}</span>
+                    {extractTime12(sheet.updatedAt, sheet.createdAt) && (
+                      <span
+                        className={`text-[10px] font-normal ${
+                          isSelected ? 'text-slate-300/80' : 'text-slate-400'
+                        }`}
+                      >
+                        {extractTime12(sheet.updatedAt, sheet.createdAt)}
+                      </span>
+                    )}
                   </div>
                   <div className="border-t border-slate-200/20 pt-1.5 flex items-center justify-between text-xs font-mono">
                     <span className={isSelected ? 'text-slate-300 text-[10px]' : 'text-slate-400 text-[10px]'}>
@@ -582,8 +607,13 @@ export const AdminReportsView: React.FC<AdminReportsViewProps> = ({
                 {currentSheet.dayName.substring(0, 2)}
               </span>
               <div>
-                <h3 className="font-bold text-slate-900 text-base">
-                  كشف يوم {currentSheet.dayName} ({currentSheet.date})
+                <h3 className="font-bold text-slate-900 text-base inline-flex items-baseline gap-1.5 flex-wrap">
+                  <span>كشف يوم {currentSheet.dayName} ({currentSheet.date})</span>
+                  {extractTime12(currentSheet.updatedAt, currentSheet.createdAt) && (
+                    <span className="text-[11px] font-mono text-slate-400 font-normal">
+                      {extractTime12(currentSheet.updatedAt, currentSheet.createdAt)}
+                    </span>
+                  )}
                 </h3>
                 <span className="text-xs text-slate-500">
                   {currentSheet.rows.length} أصناف مسجلة • مبيعات {currentSheet.totalSale.toLocaleString()} ر.ي
@@ -955,9 +985,16 @@ export const AdminReportsView: React.FC<AdminReportsViewProps> = ({
                             }`}
                           >
                             <td className="p-3 text-center font-mono text-slate-400">{idx + 1}</td>
-                            <td className="p-3 font-bold text-slate-900">
-                              <span>{sheet.dayName}</span>{' '}
-                              <span className="text-xs font-mono text-slate-500 font-normal">({sheet.date})</span>
+                            <td className="p-3 font-bold text-slate-900 whitespace-nowrap">
+                              <span className="inline-flex items-baseline gap-1.5">
+                                <span>{sheet.dayName}</span>
+                                <span className="text-xs font-mono text-slate-500 font-normal">({sheet.date})</span>
+                                {extractTime12(sheet.updatedAt, sheet.createdAt) && (
+                                  <span className="text-[10px] font-mono text-slate-400 font-normal">
+                                    {extractTime12(sheet.updatedAt, sheet.createdAt)}
+                                  </span>
+                                )}
+                              </span>
                             </td>
                             <td className="p-3 text-center font-mono text-slate-700">
                               {sheet.rows.length} صنف

@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Grocery, DailySheet, Voucher, SystemSettings } from '../types';
+import { extractTime12 } from '../services/storage';
 import {
   Store,
   Printer,
@@ -26,6 +27,7 @@ interface GroceryPortalViewProps {
       sheet?: DailySheet;
       statementRows?: {
         date: string;
+        time?: string | null;
         description: string;
         debit: number;
         credit: number;
@@ -56,7 +58,15 @@ export const GroceryPortalView: React.FC<GroceryPortalViewProps> = ({
     (currentUser?.role === 'grocery' && currentUser.groceryId
       ? groceries.find((g) => g.id === currentUser.groceryId)
       : groceries.find((g) => g.id === selectedGroceryId)) || groceries[0];
-  const todaySheet = sheets[0] || sheets[sheets.length - 1];
+  const todaySheet =
+    sheets.find(
+      (s) =>
+        s.status === 'settled' &&
+        s.rows.some((r) => (Number(r.quantities[selectedGrocery?.id]) || 0) > 0)
+    ) ||
+    sheets.find((s) => s.status === 'settled' && (Number(s.totalCost) || 0) > 0) ||
+    sheets[0] ||
+    sheets[sheets.length - 1];
 
   // Calculate today's delivery items for this grocery
   const todayItems = todaySheet
@@ -78,6 +88,7 @@ export const GroceryPortalView: React.FC<GroceryPortalViewProps> = ({
 
     const rows: {
       date: string;
+      time?: string | null;
       description: string;
       debit: number;
       credit: number;
@@ -102,6 +113,7 @@ export const GroceryPortalView: React.FC<GroceryPortalViewProps> = ({
       if (sumAmount > 0) {
         rows.push({
           date: sheet.date,
+          time: extractTime12(sheet.updatedAt, sheet.createdAt),
           description: `فاتورة خضروات كشف ${sheet.dayName} (${items.length} أصناف)`,
           debit: sumAmount,
           credit: 0,
@@ -116,6 +128,7 @@ export const GroceryPortalView: React.FC<GroceryPortalViewProps> = ({
     gVouchers.forEach((v) => {
       rows.push({
         date: v.date,
+        time: extractTime12(v.createdAt),
         description: `سند سداد رقم ${v.voucherNumber} (${v.paymentMethod === 'cash' ? 'نقداً' : 'تحويل'})`,
         debit: 0,
         credit: Number(v.amount) || 0,
@@ -306,8 +319,15 @@ export const GroceryPortalView: React.FC<GroceryPortalViewProps> = ({
         {activeTab === 'today_delivery' && (
           <div className="p-4 sm:p-6 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-200 pb-3 text-xs text-slate-500">
-              <span>
-                تاريخ الكشف: <span className="font-mono font-bold text-slate-800">{todaySheet?.date}</span> ({todaySheet?.dayName})
+              <span className="inline-flex items-baseline gap-1.5 whitespace-nowrap">
+                <span>تاريخ الكشف:</span>
+                <span className="font-mono font-bold text-slate-800">{todaySheet?.date}</span>
+                {todaySheet && extractTime12(todaySheet.updatedAt, todaySheet.createdAt) && (
+                  <span className="text-[10px] font-mono text-slate-400 font-normal">
+                    {extractTime12(todaySheet.updatedAt, todaySheet.createdAt)}
+                  </span>
+                )}
+                <span>({todaySheet?.dayName})</span>
               </span>
               <span className="text-[#009432] font-semibold flex items-center gap-1">
                 <CheckCircle2 className="w-4 h-4" />
@@ -454,7 +474,16 @@ export const GroceryPortalView: React.FC<GroceryPortalViewProps> = ({
                         idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/60'
                       }`}
                     >
-                      <td className="p-2.5 font-mono text-slate-600">{row.date}</td>
+                      <td className="p-2.5 font-mono text-slate-600 whitespace-nowrap">
+                        <span className="inline-flex items-baseline gap-1.5">
+                          <span>{row.date}</span>
+                          {row.time && (
+                            <span className="text-[10px] text-slate-400 font-normal">
+                              {row.time}
+                            </span>
+                          )}
+                        </span>
+                      </td>
                       <td className="p-2.5 font-medium text-slate-900">{row.description}</td>
                       <td className="p-2.5 text-center font-mono tabular-nums text-slate-800">
                         {row.debit > 0 ? `${row.debit.toLocaleString()} ر.ي` : '-'}

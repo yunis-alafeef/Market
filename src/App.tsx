@@ -18,7 +18,7 @@ import {
   AuthSession,
   UserAccount,
 } from './types';
-import { StorageService, getArabicDayName, getEffectiveMarketDate, generateCleanRows, STORAGE_KEYS, getSyncStatus, subscribeSyncStatus } from './services/storage';
+import { StorageService, getArabicDayName, getEffectiveMarketDate, getYemenNow, generateCleanRows, STORAGE_KEYS, getSyncStatus, subscribeSyncStatus } from './services/storage';
 import { AuthService } from './services/auth';
 import { SupabaseBackupService } from './services/supabaseBackup';
 import { Header } from './components/Header';
@@ -151,6 +151,7 @@ function AppInner() {
       voucher?: Voucher;
       statementRows?: {
         date: string;
+        time?: string | null;
         description: string;
         debit: number;
         credit: number;
@@ -224,12 +225,8 @@ function AppInner() {
     newValue?: string,
     details?: string
   ) => {
-    const now = new Date();
-    const effective = getEffectiveMarketDate();
-    const timestamp =
-      effective.actualDateStr +
-      ' ' +
-      now.toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const yemen = getYemenNow();
+    const timestamp = `${yemen.dateStr} ${yemen.time24}`;
 
     const newLog: AuditLog = {
       id: `log_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
@@ -249,7 +246,11 @@ function AppInner() {
   // Get or Create Worksheet for Date
   const targetWorksheetDate = currentWorksheetDate;
   const currentSheet =
-    (managerEditingDate ? dailySheets.find((s) => s.id === managerEditingDate || s.date === managerEditingDate) : null) ||
+    (managerEditingDate
+      ? dailySheets.find((s) => s.id === managerEditingDate) ||
+        dailySheets.find((s) => s.date === managerEditingDate && s.status === 'settled') ||
+        dailySheets.find((s) => s.date === managerEditingDate)
+      : null) ||
     dailySheets.find((s) => s.date === currentWorksheetDate && s.status !== 'settled') ||
     dailySheets.find((s) => s.date === currentWorksheetDate) ||
     dailySheets[0] || {
@@ -264,8 +265,8 @@ function AppInner() {
       notes: '',
       nightOrdersSaved: false,
       morningSortGenerated: false,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      createdAt: `${targetWorksheetDate} 00:00:00`,
+      updatedAt: `${targetWorksheetDate} 00:00:00`,
     };
 
   // Update Daily Sheet Handler
@@ -289,19 +290,25 @@ function AppInner() {
     currentSheets.forEach((s) => {
       if (s.status === 'settled') {
         s.rows.forEach((r) => {
-          // Grocery amounts
-          groceries.forEach((g) => {
-            const q = Number(r.quantities[g.id]) || 0;
-            if (q > 0) {
-              const lineAmount = Math.round(q * (Number(r.costPrice) || 0) * 100) / 100;
-              groceryPurchases[g.id] = (groceryPurchases[g.id] || 0) + lineAmount;
+          const unitCost = Number(r.costPrice) || 0;
+          // Grocery amounts: (كمية البقالة من الصنف × سعر الشراء)
+          Object.entries(r.quantities || {}).forEach(([gId, qVal]) => {
+            const q = Number(qVal) || 0;
+            if (q > 0 && unitCost > 0) {
+              const lineAmount = Math.round(q * unitCost * 100) / 100;
+              groceryPurchases[gId] = (groceryPurchases[gId] || 0) + lineAmount;
             }
           });
-          // Supplier amounts
+          // Supplier amounts: (إجمالي كمية الصنف المشتراة × سعر الشراء)
+          const cleanSupplierName = (r.supplierName || '').replace(' (مورد إضافي)', '').trim();
           const matchedSupplierId =
-            r.supplierId || suppliers.find((sup) => sup.name === r.supplierName)?.id || '';
+            r.supplierId ||
+            suppliers.find((sup) => sup.name === r.supplierName || sup.name === cleanSupplierName)?.id ||
+            '';
           if (matchedSupplierId) {
-            const lineCost = Math.round((Number(r.totalCost) || 0) * 100) / 100;
+            const sumGQty = Object.values(r.quantities || {}).reduce((acc, q) => acc + (Number(q) || 0), 0);
+            const rowQty = (Number(r.totalQuantity) || 0) > 0 ? Number(r.totalQuantity) : sumGQty;
+            const lineCost = Math.round(rowQty * unitCost * 100) / 100;
             supplierPurchases[matchedSupplierId] = (supplierPurchases[matchedSupplierId] || 0) + lineCost;
           }
         });
@@ -346,21 +353,56 @@ function AppInner() {
     recalculateAllBalances(dailySheets, vouchers);
   }, [dailySheets, vouchers, groceries.length, suppliers.length]);
 
-  // Normal Worker Settling: Mark settled, update ledgers, zero out worksheet, and backup to Supabase
+  // Normal Worker Settling: Mark settled, update ledgers, confirm cloud save, then zero out worksheet
   const handleSettleWorkerSheet = async (sheetToSettle: DailySheet) => {
-    const totalQty = sheetToSettle.rows.reduce((sum, r) => sum + (Number(r.totalQuantity) || 0), 0);
+    const yemen = getYemenNow();
+    const normalizedRows = sheetToSettle.rows.map((r) => {
+      const sumGQty = Math.round(
+        Object.values(r.quantities || {}).reduce((acc, q) => acc + (Number(q) || 0), 0) * 100
+      ) / 100;
+      const rowQty = (Number(r.totalQuantity) || 0) > 0 ? Number(r.totalQuantity) : sumGQty;
+      const unitCost = Math.max(0, Number(r.costPrice) || 0);
+      const lineCost = Math.round(rowQty * unitCost * 100) / 100;
+      return {
+        ...r,
+        costPrice: unitCost,
+        salePrice: unitCost,
+        totalQuantity: rowQty,
+        totalCost: lineCost,
+        totalSale: lineCost,
+        profit: 0,
+      };
+    });
+    const totalQty = Math.round(normalizedRows.reduce((sum, r) => sum + (Number(r.totalQuantity) || 0), 0) * 100) / 100;
+    const totalCost = Math.round(normalizedRows.reduce((sum, r) => sum + (Number(r.totalCost) || 0), 0) * 100) / 100;
+
     const settledSheet: DailySheet = {
       ...sheetToSettle,
+      rows: normalizedRows,
+      totalCost,
+      totalSale: totalCost,
+      totalProfit: 0,
       status: 'settled',
       nightOrdersSaved: true,
       morningSortGenerated: true,
-      updatedAt: new Date().toLocaleTimeString('ar-SA'),
+      updatedAt: `${yemen.dateStr} ${yemen.time12}`,
     };
 
     const nextSheets = dailySheets.map((s) => (s.id === settledSheet.id ? settledSheet : s));
     if (!nextSheets.some((s) => s.id === settledSheet.id)) {
       nextSheets.unshift(settledSheet);
     }
+
+    // Stage changes to storage and verify database persistence BEFORE zeroing out fields
+    StorageService.saveDailySheets(nextSheets);
+    const flushRes = await StorageService.flushAll();
+    if (!flushRes.success) {
+      alert(
+        `❌ تعذر ترحيل الحسابات وحفظها في قاعدة البيانات:\n${flushRes.error || 'خطأ في الاتصال'}\n\nتم الاحتفاظ بجميع البيانات المدخلة في الشاشة حتى لا تفقد عملك.`
+      );
+      return;
+    }
+
     setDailySheets(nextSheets);
     recalculateAllBalances(nextSheets, vouchers);
 
@@ -379,7 +421,7 @@ function AppInner() {
       }
     });
 
-    // Generate fresh clean blank rows for the new day
+    // Generate fresh clean blank rows (quantities = 0, total = 0, status = pending) ONLY after successful settle
     const effective = getEffectiveMarketDate();
     const blankRows = generateCleanRows(items, suppliers, groceries, effective.dateStr);
 
@@ -395,11 +437,20 @@ function AppInner() {
       notes: 'كشف عمل جديد بعد الترحيل والتصفير التلقائي',
       nightOrdersSaved: false,
       morningSortGenerated: false,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      createdAt: `${effective.dateStr} 00:00:00`,
+      updatedAt: `${effective.dateStr} 00:00:00`,
     };
 
-    setDailySheets((prev) => [freshNewSheet, ...prev.filter((s) => s.id !== freshNewSheet.id)]);
+    const sheetsWithFresh = [
+      freshNewSheet,
+      ...nextSheets.filter(
+        (s) => s.id !== freshNewSheet.id && !(s.date === effective.dateStr && s.status !== 'settled')
+      ),
+    ];
+    setDailySheets(sheetsWithFresh);
+    StorageService.saveDailySheets(sheetsWithFresh);
+    void StorageService.flushAll();
+
     setCurrentWorksheetDate(effective.dateStr);
     setManagerEditingDate(null);
 
@@ -408,6 +459,13 @@ function AppInner() {
 
   // The KEY REQUIRED FEATURE: "تعديل شامل لليوم"
   const handleEditDayComprehensive = (sheet: DailySheet) => {
+    setDailySheets((prev) => {
+      const exists = prev.some((s) => s.id === sheet.id);
+      if (exists) {
+        return prev.map((s) => (s.id === sheet.id ? sheet : s));
+      }
+      return [sheet, ...prev];
+    });
     setCurrentWorksheetDate(sheet.date);
     setManagerEditingDate(sheet.id);
     setActivePage('worker');
@@ -422,13 +480,88 @@ function AppInner() {
 
   // Manager Save Edit & Resettle with Exact Original Date
   const handleSaveManagerEditAndResettle = async (updatedSheet: DailySheet) => {
+    const yemen = getYemenNow();
+    const normalizedRows = updatedSheet.rows.map((r) => {
+      const sumGQty = Math.round(
+        Object.values(r.quantities || {}).reduce((acc, q) => acc + (Number(q) || 0), 0) * 100
+      ) / 100;
+      const rowQty = (Number(r.totalQuantity) || 0) > 0 ? Number(r.totalQuantity) : sumGQty;
+      const unitCost = Math.max(0, Number(r.costPrice) || 0);
+      const lineCost = Math.round(rowQty * unitCost * 100) / 100;
+      return {
+        ...r,
+        costPrice: unitCost,
+        salePrice: unitCost,
+        totalQuantity: rowQty,
+        totalCost: lineCost,
+        totalSale: lineCost,
+        profit: 0,
+      };
+    });
+    const totalCost = Math.round(normalizedRows.reduce((sum, r) => sum + (Number(r.totalCost) || 0), 0) * 100) / 100;
+
     const finalSheet: DailySheet = {
       ...updatedSheet,
+      rows: normalizedRows,
+      totalCost,
+      totalSale: totalCost,
+      totalProfit: 0,
       status: 'settled',
-      updatedAt: new Date().toLocaleTimeString('ar-SA'),
+      updatedAt: `${yemen.dateStr} ${yemen.time12}`,
     };
 
-    const nextSheets = dailySheets.map((s) => (s.id === finalSheet.id ? finalSheet : s));
+    // Replace the edited sheet in place without creating duplicates, and zero out any open worksheet
+    const effective = getEffectiveMarketDate();
+    const blankRows = generateCleanRows(items, suppliers, groceries, effective.dateStr);
+    const hasEditedSheet = dailySheets.some((s) => s.id === finalSheet.id);
+    let nextSheets = (hasEditedSheet
+      ? dailySheets.map((s) => (s.id === finalSheet.id ? finalSheet : s))
+      : [finalSheet, ...dailySheets]
+    ).map((s) => {
+      if (s.status !== 'settled' && s.id !== finalSheet.id) {
+        return {
+          ...s,
+          rows: generateCleanRows(items, suppliers, groceries, s.date),
+          totalCost: 0,
+          totalSale: 0,
+          totalProfit: 0,
+          nightOrdersSaved: false,
+          morningSortGenerated: false,
+        };
+      }
+      return s;
+    });
+
+    if (!nextSheets.some((s) => s.date === effective.dateStr && s.status !== 'settled')) {
+      nextSheets = [
+        {
+          id: `sheet_${effective.dateStr}_${Date.now()}`,
+          date: effective.dateStr,
+          dayName: effective.dayName,
+          status: 'open',
+          rows: blankRows,
+          totalCost: 0,
+          totalSale: 0,
+          totalProfit: 0,
+          notes: 'كشف عمل نظيف بعد حفظ التعديل الشامل',
+          nightOrdersSaved: false,
+          morningSortGenerated: false,
+          createdAt: `${effective.dateStr} 00:00:00`,
+          updatedAt: `${effective.dateStr} 00:00:00`,
+        },
+        ...nextSheets,
+      ];
+    }
+
+    StorageService.saveDailySheets(nextSheets);
+    const flushRes = await StorageService.flushAll();
+    if (!flushRes.success) {
+      alert(
+        `❌ تعذر حفظ التعديل وإعادة الترحيل في قاعدة البيانات:\n${flushRes.error || 'خطأ في الاتصال'}\n\nتم الاحتفاظ بالتعديلات في الشاشة.`
+      );
+      return;
+    }
+
     setDailySheets(nextSheets);
     recalculateAllBalances(nextSheets, vouchers);
 
@@ -447,19 +580,19 @@ function AppInner() {
       }
     });
 
+    setCurrentWorksheetDate(effective.dateStr);
     setManagerEditingDate(null);
     setActivePage('reports');
-    alert(`✅ تم حفظ التعديل الشامل وإعادة ترحيل كشف ${finalSheet.dayName} (${finalSheet.date}) بنجاح بنفس تاريخه القديم وتحديث كافة أرصدة البقالات والموردين والنسخ الاحتياطي في سوبابيز بدقة! ☁️`);
+    alert(`✅ تم حفظ التعديل الشامل وإعادة ترحيل كشف ${finalSheet.dayName} (${finalSheet.date}) بنجاح بنفس تاريخه القديم وتحديث كافة أرصدة البقالات والموردين وتصفير شاشة العمل! ☁️`);
   };
 
   // Add Voucher (Receipt or Payment)
   const handleAddVoucher = (voucherData: Omit<Voucher, 'id' | 'createdAt'>) => {
-    const effective = getEffectiveMarketDate();
-    const nowTime = new Date().toTimeString().split(' ')[0];
+    const yemen = getYemenNow();
     const newVoucher: Voucher = {
       ...voucherData,
       id: `v_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-      createdAt: `${effective.actualDateStr} ${nowTime}`,
+      createdAt: `${yemen.dateStr} ${yemen.time24}`,
     };
 
     const nextVouchers = [newVoucher, ...vouchers];

@@ -1,4 +1,4 @@
-﻿import { Grocery, Supplier, VegetableItem, DailySheet, Voucher, AuditLog, SystemSettings, DailyOrderRow } from '../types';
+import { Grocery, Supplier, VegetableItem, DailySheet, Voucher, AuditLog, SystemSettings, DailyOrderRow } from '../types';
 
 import { supabase } from './supabase';
 
@@ -52,6 +52,136 @@ export function getArabicDayName(dateString: string): string {
   const days = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
   const d = new Date(dateString + 'T12:00:00');
   return days[d.getDay()] || 'اليوم';
+}
+
+/**
+ * Returns deterministic current date and time in Yemen timezone (Asia/Riyadh, UTC+3).
+ */
+export function getYemenNow(): {
+  dateStr: string;
+  time24: string;
+  time12: string;
+  fullTimestamp: string;
+} {
+  const now = new Date();
+  let year = now.getFullYear();
+  let month = now.getMonth() + 1;
+  let day = now.getDate();
+  let hours = now.getHours();
+  let minutes = now.getMinutes();
+  let seconds = now.getSeconds();
+
+  try {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Riyadh',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    }).formatToParts(now);
+
+    const pMap: Record<string, string> = {};
+    parts.forEach((p) => {
+      pMap[p.type] = p.value;
+    });
+
+    if (pMap.year && pMap.month && pMap.day) {
+      year = parseInt(pMap.year, 10);
+      month = parseInt(pMap.month, 10);
+      day = parseInt(pMap.day, 10);
+      hours = parseInt(pMap.hour || '0', 10) % 24;
+      minutes = parseInt(pMap.minute || '0', 10);
+      seconds = parseInt(pMap.second || '0', 10);
+    }
+  } catch {
+    // fallback to local browser time
+  }
+
+  const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  const time24 = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+  const h12 = hours % 12 || 12;
+  const ampm = hours < 12 ? 'ص' : 'م';
+  const time12 = `${String(h12).padStart(2, '0')}:${String(minutes).padStart(2, '0')} ${ampm}`;
+
+  return {
+    dateStr,
+    time24,
+    time12,
+    fullTimestamp: `${dateStr} ${time24}`,
+  };
+}
+
+/**
+ * Safely extracts a 12-hour Arabic time string (e.g. "02:35 ص") from stored timestamp/time fields.
+ * Returns null if the record has no valid stored time (prevents inventing fake times for old records).
+ */
+export function extractTime12(...candidates: (string | undefined | null)[]): string | null {
+  for (const raw of candidates) {
+    if (!raw || typeof raw !== 'string') continue;
+    const s = raw.trim();
+    if (!s || s.includes('?')) continue;
+    // Pure date only
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) continue;
+    // Placeholder midnight timestamp on initial open sheets
+    if (s.endsWith('00:00:00')) continue;
+
+    // Already formatted with Arabic AM/PM (e.g. "02:35 ص" or "2026-11-01 02:35 ص" or "02:35:10 م")
+    const arMatch = s.match(/(\d{1,2}):(\d{2})(?::\d{2})?\s*([صم])/);
+    if (arMatch) {
+      const hh = String(parseInt(arMatch[1], 10)).padStart(2, '0');
+      const mm = arMatch[2];
+      const period = arMatch[3];
+      return `${hh}:${mm} ${period}`;
+    }
+
+    // ISO timestamp (e.g. "2026-10-31T22:16:35.836Z")
+    if (s.includes('T') && (s.endsWith('Z') || /[+-]\d{2}:\d{2}$/.test(s))) {
+      const d = new Date(s);
+      if (!isNaN(d.getTime())) {
+        try {
+          const parts = new Intl.DateTimeFormat('en-CA', {
+            timeZone: 'Asia/Riyadh',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false,
+          }).formatToParts(d);
+          const pMap: Record<string, string> = {};
+          parts.forEach((p) => {
+            pMap[p.type] = p.value;
+          });
+          if (pMap.hour && pMap.minute) {
+            const hours = parseInt(pMap.hour, 10) % 24;
+            const minutes = parseInt(pMap.minute, 10);
+            const h12 = hours % 12 || 12;
+            const ampm = hours < 12 ? 'ص' : 'م';
+            return `${String(h12).padStart(2, '0')}:${String(minutes).padStart(2, '0')} ${ampm}`;
+          }
+        } catch {
+          const hours = d.getHours();
+          const minutes = d.getMinutes();
+          const h12 = hours % 12 || 12;
+          const ampm = hours < 12 ? 'ص' : 'م';
+          return `${String(h12).padStart(2, '0')}:${String(minutes).padStart(2, '0')} ${ampm}`;
+        }
+      }
+    }
+
+    // "YYYY-MM-DD HH:MM:SS" or "HH:MM:SS" or "HH:MM"
+    const time24Match = s.match(/(?:^\d{4}-\d{2}-\d{2}\s+|^)(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+    if (time24Match) {
+      const hours = parseInt(time24Match[1], 10);
+      const minutes = parseInt(time24Match[2], 10);
+      const seconds = time24Match[3] ? parseInt(time24Match[3], 10) : 0;
+      if (hours === 0 && minutes === 0 && seconds === 0) continue;
+      const h12 = hours % 12 || 12;
+      const ampm = hours < 12 ? 'ص' : 'م';
+      return `${String(h12).padStart(2, '0')}:${String(minutes).padStart(2, '0')} ${ampm}`;
+    }
+  }
+  return null;
 }
 
 /**
@@ -450,8 +580,8 @@ export const StorageService = {
   },
   addAuditLog(log: Omit<AuditLog, 'id' | 'timestamp'>): void {
     const current = this.getAuditLogs();
-    const now = new Date();
-    const timeStr = getEffectiveMarketDate().actualDateStr + ' ' + now.toTimeString().split(' ')[0];
+    const yemen = getYemenNow();
+    const timeStr = `${yemen.dateStr} ${yemen.time24}`;
     const newEntry: AuditLog = {
       ...log,
       id: 'log_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
@@ -459,6 +589,34 @@ export const StorageService = {
     };
     const updated = [newEntry, ...current].slice(0, 300);
     this.saveAuditLogs(updated);
+  },
+
+  /**
+   * Immediately flushes all dirty collections to Supabase and confirms persistence.
+   */
+  async flushAll(): Promise<{ success: boolean; error?: string }> {
+    try {
+      for (const k of SYNC_KEYS) {
+        clearTimeout(pushTimers[k]);
+        let waitCount = 0;
+        while (pushing[k] && waitCount < 30) {
+          await new Promise((r) => setTimeout(r, 100));
+          waitCount++;
+        }
+        if (isDirty(k)) {
+          await pushNow(k);
+        }
+      }
+      const st = getSyncStatus();
+      if (st.error) {
+        return { success: false, error: st.error };
+      }
+      return { success: true };
+    } catch (e: any) {
+      const errMsg = describeError(e?.message || String(e));
+      setSyncStatus({ error: errMsg });
+      return { success: false, error: errMsg };
+    }
   },
 
   getSettings(): SystemSettings {

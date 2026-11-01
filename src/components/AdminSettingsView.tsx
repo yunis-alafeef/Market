@@ -8,6 +8,7 @@ import {
   ThemeId,
 } from '../types';
 import { AuthService } from '../services/auth';
+import { extractTime12 } from '../services/storage';
 import { THEMES } from './ThemeSwitcher';
 import {
   Settings,
@@ -1384,7 +1385,22 @@ VITE_SUPABASE_ANON_KEY="sb_publishable_DesBAjmOQwAYOtcKggQwFQ__vkAjme5"`}
                     .map((log) => (
                       <tr key={log.id} className="border-b border-slate-200 hover:bg-slate-50">
                         <td className="p-2.5 font-mono text-xs text-slate-600 whitespace-nowrap">
-                          {log.timestamp}
+                          {(() => {
+                            const raw = log.timestamp || '';
+                            const dateMatch = raw.match(/^(\d{4}-\d{2}-\d{2})/);
+                            const datePart = dateMatch ? dateMatch[1] : raw;
+                            const timePart = extractTime12(raw);
+                            return (
+                              <span className="inline-flex items-baseline gap-1.5">
+                                <span>{datePart}</span>
+                                {timePart && (
+                                  <span className="text-[10px] text-slate-400 font-normal">
+                                    {timePart}
+                                  </span>
+                                )}
+                              </span>
+                            );
+                          })()}
                         </td>
                         <td className="p-2.5 font-semibold text-slate-800">{log.user}</td>
                         <td className="p-2.5 font-bold text-[#0c2461]">{log.action}</td>

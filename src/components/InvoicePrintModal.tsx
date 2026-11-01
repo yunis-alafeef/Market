@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Printer, X, FileText, CheckCircle2, QrCode, Award, Shield, Sparkles } from 'lucide-react';
 import { SystemSettings, DailySheet, Grocery, Supplier, Voucher, PrintTemplateId } from '../types';
+import { getYemenNow, extractTime12 } from '../services/storage';
 
 interface InvoicePrintModalProps {
   isOpen: boolean;
@@ -15,6 +16,7 @@ interface InvoicePrintModalProps {
     voucher?: Voucher;
     statementRows?: {
       date: string;
+      time?: string | null;
       description: string;
       debit: number;
       credit: number;
@@ -39,11 +41,12 @@ export const InvoicePrintModal: React.FC<InvoicePrintModalProps> = ({
     window.print();
   };
 
-  const todayStr = new Date().toLocaleDateString('ar-SA', {
+  const yemenNow = getYemenNow();
+  const todayStr = `${new Date().toLocaleDateString('ar-SA', {
     year: 'numeric',
     month: 'long',
     day: 'numeric',
-  });
+  })}  ${yemenNow.time12}`;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-md overflow-y-auto print-modal-backdrop">
@@ -152,9 +155,14 @@ export const InvoicePrintModal: React.FC<InvoicePrintModalProps> = ({
                       <span className="text-slate-600 font-medium">كشف يوم:</span>{' '}
                       <span className="font-bold text-[#0c2461]">{data.sheet.dayName}</span>
                     </div>
-                    <div>
+                    <div className="inline-flex items-baseline gap-1.5 whitespace-nowrap">
                       <span className="text-slate-600 font-medium">تاريخ الكشف:</span>{' '}
                       <span className="font-bold font-mono text-slate-900">{data.sheet.date}</span>
+                      {extractTime12(data.sheet.updatedAt, data.sheet.createdAt) && (
+                        <span className="text-[10px] font-mono text-slate-500 font-normal">
+                          {extractTime12(data.sheet.updatedAt, data.sheet.createdAt)}
+                        </span>
+                      )}
                     </div>
                     <div>
                       <span className="text-slate-600 font-medium">الحالة:</span>{' '}
@@ -227,11 +235,16 @@ export const InvoicePrintModal: React.FC<InvoicePrintModalProps> = ({
                       )}
                     </div>
                     <div className="flex items-center gap-4">
-                      <div>
+                      <div className="inline-flex items-baseline gap-1.5 whitespace-nowrap">
                         <span className="text-slate-500 font-medium">التاريخ:</span>{' '}
                         <span className="font-bold font-mono text-slate-800">
                           {data.sheet?.date || todayStr} ({data.sheet?.dayName})
                         </span>
+                        {data.sheet && extractTime12(data.sheet.updatedAt, data.sheet.createdAt) && (
+                          <span className="text-[10px] font-mono text-slate-500 font-normal">
+                            {extractTime12(data.sheet.updatedAt, data.sheet.createdAt)}
+                          </span>
+                        )}
                       </div>
                       <div className="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-md font-bold text-xs">
                         فاتورة تسليم بضاعة معتمدة
@@ -376,7 +389,16 @@ export const InvoicePrintModal: React.FC<InvoicePrintModalProps> = ({
                     <tbody>
                       {data.statementRows.map((row, idx) => (
                         <tr key={idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
-                          <td className="p-2.5 border border-slate-200 font-mono">{row.date}</td>
+                          <td className="p-2.5 border border-slate-200 font-mono whitespace-nowrap">
+                            <span className="inline-flex items-baseline gap-1.5">
+                              <span>{row.date}</span>
+                              {row.time && (
+                                <span className="text-[10px] text-slate-500 font-normal">
+                                  {row.time}
+                                </span>
+                              )}
+                            </span>
+                          </td>
                           <td className="p-2.5 border border-slate-200 font-medium text-slate-900">{row.description}</td>
                           <td className="p-2.5 border border-slate-200 text-center font-mono tabular-nums">
                             {row.debit > 0 ? `${row.debit.toLocaleString()} ر.ي` : '-'}
@@ -391,6 +413,54 @@ export const InvoicePrintModal: React.FC<InvoicePrintModalProps> = ({
                       ))}
                     </tbody>
                   </table>
+                </div>
+              )}
+
+              {/* Voucher Content */}
+              {type === 'voucher' && data.voucher && (
+                <div className="bg-amber-50/40 p-6 rounded-2xl border-2 border-[#0c2461] space-y-4 text-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 pb-4">
+                    <div>
+                      <span className="text-slate-500 font-medium">رقم السند:</span>{' '}
+                      <span className="font-mono font-black text-lg text-[#0c2461]">{data.voucher.voucherNumber}</span>
+                    </div>
+                    <div className="inline-flex items-baseline gap-1.5 whitespace-nowrap">
+                      <span className="text-slate-500 font-medium">تاريخ وتوقيت العملية:</span>{' '}
+                      <span className="font-mono font-bold text-slate-900">{data.voucher.date}</span>
+                      {extractTime12(data.voucher.createdAt) && (
+                        <span className="text-[11px] font-mono text-slate-500 font-normal">
+                          {extractTime12(data.voucher.createdAt)}
+                        </span>
+                      )}
+                    </div>
+                    <div>
+                      <span className="px-3 py-1 rounded-lg font-black text-xs bg-[#0c2461] text-[#f6b93b]">
+                        {data.voucher.type === 'receipt' ? 'سند قبض رسمي' : 'سند صرف رسمي'}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div className="bg-white p-3.5 rounded-xl border border-slate-200">
+                      <span className="text-xs text-slate-500 block">الجهة / المستفيد:</span>
+                      <span className="font-black text-slate-900 text-base">{data.voucher.partyName}</span>
+                    </div>
+                    <div className="bg-white p-3.5 rounded-xl border border-slate-200">
+                      <span className="text-xs text-slate-500 block">المبلغ المعتمد:</span>
+                      <span className="font-mono font-black text-[#009432] text-lg tabular-nums">
+                        {Number(data.voucher.amount).toLocaleString()} ر.ي
+                      </span>
+                    </div>
+                    <div className="bg-white p-3.5 rounded-xl border border-slate-200">
+                      <span className="text-xs text-slate-500 block">طريقة الدفع:</span>
+                      <span className="font-bold text-slate-800">
+                        {data.voucher.paymentMethod === 'cash' ? 'نقداً' : data.voucher.paymentMethod === 'transfer' ? 'تحويل بنكي/صرافة' : 'شيك'}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="bg-white p-3.5 rounded-xl border border-slate-200">
+                    <span className="text-xs text-slate-500 block mb-1">البيان والملاحظات:</span>
+                    <span className="font-semibold text-slate-800">{data.voucher.notes || '-'}</span>
+                  </div>
                 </div>
               )}
 
@@ -534,9 +604,14 @@ export const InvoicePrintModal: React.FC<InvoicePrintModalProps> = ({
                       <span className="text-slate-500">العميل:</span>{' '}
                       <span className="font-bold text-slate-900">{data.grocery?.name} ({data.grocery?.code})</span>
                     </div>
-                    <div>
+                    <div className="inline-flex items-baseline gap-1.5 whitespace-nowrap">
                       <span className="text-slate-500">التاريخ:</span>{' '}
                       <span className="font-mono font-bold">{data.sheet?.date || todayStr}</span>
+                      {data.sheet && extractTime12(data.sheet.updatedAt, data.sheet.createdAt) && (
+                        <span className="text-[10px] font-mono text-slate-400 font-normal">
+                          {extractTime12(data.sheet.updatedAt, data.sheet.createdAt)}
+                        </span>
+                      )}
                     </div>
                   </div>
 
@@ -594,7 +669,16 @@ export const InvoicePrintModal: React.FC<InvoicePrintModalProps> = ({
                   <tbody>
                     {data.statementRows.map((row, idx) => (
                       <tr key={idx} className="border-b border-slate-100">
-                        <td className="py-2 px-2 font-mono text-slate-500">{row.date}</td>
+                        <td className="py-2 px-2 font-mono text-slate-500 whitespace-nowrap">
+                          <span className="inline-flex items-baseline gap-1.5">
+                            <span>{row.date}</span>
+                            {row.time && (
+                              <span className="text-[10px] text-slate-400 font-normal">
+                                {row.time}
+                              </span>
+                            )}
+                          </span>
+                        </td>
                         <td className="py-2 px-2 font-medium text-slate-800">{row.description}</td>
                         <td className="py-2 px-2 text-center font-mono tabular-nums">{row.debit > 0 ? `${row.debit.toLocaleString()} ر.ي` : '-'}</td>
                         <td className="py-2 px-2 text-center font-mono tabular-nums text-emerald-600 font-bold">{row.credit > 0 ? `${row.credit.toLocaleString()} ر.ي` : '-'}</td>
@@ -603,6 +687,43 @@ export const InvoicePrintModal: React.FC<InvoicePrintModalProps> = ({
                     ))}
                   </tbody>
                 </table>
+              )}
+
+              {/* Modern Voucher */}
+              {type === 'voucher' && data.voucher && (
+                <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-3 text-xs sm:text-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3">
+                    <div>
+                      <span className="text-slate-500">رقم السند:</span>{' '}
+                      <span className="font-mono font-black text-slate-900">{data.voucher.voucherNumber}</span>
+                    </div>
+                    <div className="inline-flex items-baseline gap-1.5 whitespace-nowrap">
+                      <span className="text-slate-500">التاريخ:</span>{' '}
+                      <span className="font-mono font-bold text-slate-900">{data.voucher.date}</span>
+                      {extractTime12(data.voucher.createdAt) && (
+                        <span className="text-[10px] font-mono text-slate-400 font-normal">
+                          {extractTime12(data.voucher.createdAt)}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center justify-between gap-4">
+                    <div>
+                      <span className="text-slate-500">الجهة:</span>{' '}
+                      <span className="font-bold text-slate-900">{data.voucher.partyName}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-500">المبلغ:</span>{' '}
+                      <span className="font-mono font-black text-emerald-700">
+                        {Number(data.voucher.amount).toLocaleString()} ر.ي
+                      </span>
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-slate-500">البيان:</span>{' '}
+                    <span className="text-slate-800">{data.voucher.notes || '-'}</span>
+                  </div>
+                </div>
               )}
 
               {/* Minimal Clean Footer */}
