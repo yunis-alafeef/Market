@@ -678,6 +678,51 @@ function AppInner() {
     return { success: true };
   };
 
+  // Edit Grocery Receipt Voucher (Admin-only transactional update)
+  const handleEditReceiptVoucher = async (
+    voucherId: string,
+    updates: {
+      partyId: string;
+      amount: number;
+      date: string;
+      paymentMethod: 'cash' | 'transfer' | 'check';
+      referenceNumber?: string;
+      notes: string;
+    }
+  ): Promise<{ success: boolean; error?: string }> => {
+    const res = await StorageService.updateGroceryReceiptVoucher({
+      actor: currentUser,
+      voucherId,
+      updates,
+    });
+    if (!res.success) {
+      return { success: false, error: res.error };
+    }
+    if (res.vouchers) setVouchers(res.vouchers);
+    if (res.groceries) setGroceries(res.groceries);
+    if (res.auditLogs) setAuditLogs(res.auditLogs);
+    if (res.vouchers) recalculateAllBalances(dailySheets, res.vouchers);
+    return { success: true };
+  };
+
+  // Delete Grocery Receipt Voucher (Admin-only transactional deletion & balance recalculation)
+  const handleDeleteReceiptVoucher = async (
+    voucherId: string
+  ): Promise<{ success: boolean; error?: string }> => {
+    const res = await StorageService.deleteGroceryReceiptVoucher({
+      actor: currentUser,
+      voucherId,
+    });
+    if (!res.success) {
+      return { success: false, error: res.error };
+    }
+    if (res.vouchers) setVouchers(res.vouchers);
+    if (res.groceries) setGroceries(res.groceries);
+    if (res.auditLogs) setAuditLogs(res.auditLogs);
+    if (res.vouchers) recalculateAllBalances(dailySheets, res.vouchers);
+    return { success: true };
+  };
+
   // Add Item to System & Current Worksheet
   const handleAddItem = (newItemData: Omit<VegetableItem, 'id'>) => {
     const newItem: VegetableItem = {
@@ -914,6 +959,8 @@ function AppInner() {
             }}
             onEditPaymentVoucher={handleEditPaymentVoucher}
             onDeletePaymentVoucher={handleDeletePaymentVoucher}
+            onEditReceiptVoucher={handleEditReceiptVoucher}
+            onDeleteReceiptVoucher={handleDeleteReceiptVoucher}
             onOpenPrintModal={(type, data) => {
               setPrintModalData({
                 title:

@@ -936,6 +936,333 @@ export const StorageService = {
     };
   },
 
+  /**
+   * Pure accounting recalculation of all grocery balances from actual settled sheets
+   * minus active grocery receipt vouchers.
+   */
+  computeGroceriesWithRecalculatedBalances(
+    sheets: DailySheet[],
+    vouchers: Voucher[],
+    groceries: Grocery[]
+  ): Grocery[] {
+    const groceryPurchases: Record<string, number> = {};
+    const groceryPaid: Record<string, number> = {};
+
+    sheets.forEach((s) => {
+      if (s.status === 'settled') {
+        s.rows.forEach((r) => {
+          const unitCost = Math.max(0, Number(r.costPrice) || 0);
+          if (unitCost > 0) {
+            Object.entries(r.quantities || {}).forEach(([gId, qVal]) => {
+              const q = Math.max(0, Number(qVal) || 0);
+              if (q > 0) {
+                const lineAmount = Math.round(q * unitCost * 100) / 100;
+                groceryPurchases[gId] =
+                  Math.round(((groceryPurchases[gId] || 0) + lineAmount) * 100) / 100;
+              }
+            });
+          }
+        });
+      }
+    });
+
+    vouchers.forEach((v) => {
+      if (v.partyType === 'grocery' && v.type === 'receipt') {
+        const amt = Math.max(0, Number(v.amount) || 0);
+        groceryPaid[v.partyId] = Math.round(((groceryPaid[v.partyId] || 0) + amt) * 100) / 100;
+      }
+    });
+
+    return groceries.map((g) => {
+      const totalDebit = Math.round((groceryPurchases[g.id] || 0) * 100) / 100;
+      const totalCredit = Math.round((groceryPaid[g.id] || 0) * 100) / 100;
+      const netBal = Math.round((totalDebit - totalCredit) * 100) / 100;
+      return { ...g, balance: netBal };
+    });
+  },
+
+  /**
+   * Transactional Admin-only update of a Grocery Receipt Voucher.
+   * Replaces the old voucher effect in-place without duplication, recalculates grocery balances
+   * from actual ledger entries, logs the audit trail, and rolls back if database flush fails.
+   */
+  async updateGroceryReceiptVoucher(params: {
+    actor?: UserAccount | null;
+    voucherId: string;
+    updates: {
+      partyId: string;
+      amount: number;
+      date: string;
+      paymentMethod: 'cash' | 'transfer' | 'check';
+      referenceNumber?: string;
+      notes: string;
+    };
+  }): Promise<{
+    success: boolean;
+    voucher?: Voucher;
+    vouchers?: Voucher[];
+    groceries?: Grocery[];
+    auditLogs?: AuditLog[];
+    error?: string;
+  }> {
+    // 1. Backend/Service Admin Permission Verification
+    if (!params.actor || params.actor.role !== 'admin' || !params.actor.active) {
+      return {
+        success: false,
+        error: '⛔ غير مصرح: تعديل سندات القبض مخصص لمدير النظام فقط ولا يملك العامل صلاحية التعديل.',
+      };
+    }
+
+    try {
+      const { data: cloudAdminRows, error: cloudErr } = await supabase
+        .from('app_users')
+        .select('id,data')
+        .eq('id', params.actor.id)
+        .limit(1);
+      if (!cloudErr && cloudAdminRows && cloudAdminRows.length > 0) {
+        const cloudAdmin = cloudAdminRows[0].data as UserAccount;
+        if (!cloudAdmin || cloudAdmin.role !== 'admin' || !cloudAdmin.active) {
+          return {
+            success: false,
+            error: '⛔ غير مصرح من الخادم: الحساب الحالي لا يملك صلاحية مدير النظام.',
+          };
+        }
+      }
+    } catch {
+      // Fallback to verified session check if offline
+    }
+
+    // 2. Validate inputs
+    const cleanAmount = Math.round((Number(params.updates.amount) || 0) * 100) / 100;
+    if (cleanAmount <= 0) {
+      return { success: false, error: '⚠️ يرجى إدخال مبلغ صحيح أكبر من الصفر.' };
+    }
+    const cleanDate = String(params.updates.date || '').trim();
+    if (!cleanDate) {
+      return { success: false, error: '⚠️ يرجى تحديد تاريخ السند.' };
+    }
+
+    // 3. Snapshot pre-transaction state for rollback safety
+    const prevVouchers = [...this.getVouchers()];
+    const prevGroceries = [...this.getGroceries()];
+    const prevAuditLogs = [...this.getAuditLogs()];
+    const currentSheets = this.getDailySheets();
+
+    const targetIndex = prevVouchers.findIndex((v) => v.id === params.voucherId);
+    if (targetIndex === -1) {
+      return { success: false, error: '⚠️ السند المطلوب تعديله غير موجود.' };
+    }
+
+    const oldVoucher = prevVouchers[targetIndex];
+    if (oldVoucher.type !== 'receipt' || oldVoucher.partyType !== 'grocery') {
+      return {
+        success: false,
+        error: '⚠️ هذا الإجراء مخصص لسندات القبض الخاصة بالبقالات فقط.',
+      };
+    }
+
+    const targetGrocery = prevGroceries.find((g) => g.id === params.updates.partyId);
+    if (!targetGrocery) {
+      return { success: false, error: '⚠️ البقالة المحددة غير موجودة في النظام.' };
+    }
+
+    const preBalancedGroceries = this.computeGroceriesWithRecalculatedBalances(
+      currentSheets,
+      prevVouchers,
+      prevGroceries
+    );
+    const oldGroceryBal =
+      preBalancedGroceries.find((g) => g.id === oldVoucher.partyId)?.balance ?? 0;
+
+    // 4. Construct updated voucher in-place (preserving exact id and voucherNumber -> zero duplication)
+    const updatedVoucher: Voucher = {
+      ...oldVoucher,
+      id: oldVoucher.id,
+      voucherNumber: oldVoucher.voucherNumber,
+      type: 'receipt',
+      partyType: 'grocery',
+      partyId: targetGrocery.id,
+      partyName: targetGrocery.name,
+      partyCode: targetGrocery.code,
+      amount: cleanAmount,
+      date: cleanDate,
+      paymentMethod: params.updates.paymentMethod,
+      referenceNumber:
+        params.updates.referenceNumber !== undefined
+          ? params.updates.referenceNumber
+          : oldVoucher.referenceNumber,
+      notes: String(params.updates.notes || '').trim() || 'دفعة سداد من حساب البقالة',
+    };
+
+    const nextVouchers = prevVouchers.map((v, idx) =>
+      idx === targetIndex ? updatedVoucher : v
+    );
+    const nextGroceries = this.computeGroceriesWithRecalculatedBalances(
+      currentSheets,
+      nextVouchers,
+      prevGroceries
+    );
+    const newGroceryBal =
+      nextGroceries.find((g) => g.id === targetGrocery.id)?.balance ?? 0;
+
+    const yemen = getYemenNow();
+    const auditEntry: AuditLog = {
+      id: 'log_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+      timestamp: `${yemen.dateStr} ${yemen.time24}`,
+      user: params.actor.name,
+      role: 'admin',
+      action: 'تعديل سند قبض بقالة',
+      target: `${updatedVoucher.voucherNumber} (${updatedVoucher.partyName})`,
+      oldValue: `البقالة: ${oldVoucher.partyName} | المبلغ: ${oldVoucher.amount.toLocaleString()} ر.ي | التاريخ: ${oldVoucher.date} | الرصيد السابق: ${oldGroceryBal.toLocaleString()} ر.ي`,
+      newValue: `البقالة: ${updatedVoucher.partyName} | المبلغ: ${updatedVoucher.amount.toLocaleString()} ر.ي | التاريخ: ${updatedVoucher.date} | الرصيد المحدث: ${newGroceryBal.toLocaleString()} ر.ي`,
+      details: `قام المدير (${params.actor.name}) بتعديل سند القبض رقم ${updatedVoucher.voucherNumber} بتاريخ ${yemen.dateStr} ${yemen.time12}. البيان: ${updatedVoucher.notes}`,
+    };
+    const nextAuditLogs = [auditEntry, ...prevAuditLogs].slice(0, 300);
+
+    // 5. Commit transaction & flush to Supabase (rollback on failure)
+    this.saveVouchers(nextVouchers);
+    this.saveGroceries(nextGroceries);
+    this.saveAuditLogs(nextAuditLogs);
+
+    const flushRes = await this.flushAll();
+    if (!flushRes.success) {
+      this.saveVouchers(prevVouchers);
+      this.saveGroceries(prevGroceries);
+      this.saveAuditLogs(prevAuditLogs);
+      return {
+        success: false,
+        error: `❌ فشل حفظ تعديل سند القبض في قاعدة البيانات (تم التراجع تلقائياً لحماية الأرصدة): ${flushRes.error}`,
+      };
+    }
+
+    return {
+      success: true,
+      voucher: updatedVoucher,
+      vouchers: nextVouchers,
+      groceries: nextGroceries,
+      auditLogs: nextAuditLogs,
+    };
+  },
+
+  /**
+   * Transactional Admin-only deletion / accounting reversal of a Grocery Receipt Voucher.
+   * Cancels the voucher's financial effect, recalculates grocery balances from actual ledger entries
+   * (preserving all subsequent/prior operations accurately), preserves historical audit records,
+   * and rolls back if database flush fails.
+   */
+  async deleteGroceryReceiptVoucher(params: {
+    actor?: UserAccount | null;
+    voucherId: string;
+  }): Promise<{
+    success: boolean;
+    deletedVoucher?: Voucher;
+    vouchers?: Voucher[];
+    groceries?: Grocery[];
+    auditLogs?: AuditLog[];
+    error?: string;
+  }> {
+    // 1. Backend/Service Admin Permission Verification
+    if (!params.actor || params.actor.role !== 'admin' || !params.actor.active) {
+      return {
+        success: false,
+        error: '⛔ غير مصرح: حذف سندات القبض مخصص لمدير النظام فقط ولا يملك العامل صلاحية الحذف.',
+      };
+    }
+
+    try {
+      const { data: cloudAdminRows, error: cloudErr } = await supabase
+        .from('app_users')
+        .select('id,data')
+        .eq('id', params.actor.id)
+        .limit(1);
+      if (!cloudErr && cloudAdminRows && cloudAdminRows.length > 0) {
+        const cloudAdmin = cloudAdminRows[0].data as UserAccount;
+        if (!cloudAdmin || cloudAdmin.role !== 'admin' || !cloudAdmin.active) {
+          return {
+            success: false,
+            error: '⛔ غير مصرح من الخادم: الحساب الحالي لا يملك صلاحية مدير النظام.',
+          };
+        }
+      }
+    } catch {
+      // Fallback to verified session check if offline
+    }
+
+    // 2. Snapshot pre-transaction state for rollback safety
+    const prevVouchers = [...this.getVouchers()];
+    const prevGroceries = [...this.getGroceries()];
+    const prevAuditLogs = [...this.getAuditLogs()];
+    const currentSheets = this.getDailySheets();
+
+    const targetVoucher = prevVouchers.find((v) => v.id === params.voucherId);
+    if (!targetVoucher) {
+      return { success: false, error: '⚠️ السند المطلوب حذفه غير موجود.' };
+    }
+    if (targetVoucher.type !== 'receipt' || targetVoucher.partyType !== 'grocery') {
+      return {
+        success: false,
+        error: '⚠️ هذا الإجراء مخصص لسندات القبض الخاصة بالبقالات فقط.',
+      };
+    }
+
+    const preBalancedGroceries = this.computeGroceriesWithRecalculatedBalances(
+      currentSheets,
+      prevVouchers,
+      prevGroceries
+    );
+    const oldGroceryBal =
+      preBalancedGroceries.find((g) => g.id === targetVoucher.partyId)?.balance ?? 0;
+
+    // 3. Remove only the target voucher and recalculate balances from actual ledger entries
+    const nextVouchers = prevVouchers.filter((v) => v.id !== params.voucherId);
+    const nextGroceries = this.computeGroceriesWithRecalculatedBalances(
+      currentSheets,
+      nextVouchers,
+      prevGroceries
+    );
+    const newGroceryBal =
+      nextGroceries.find((g) => g.id === targetVoucher.partyId)?.balance ?? 0;
+
+    // 4. Record full historical reversal / deletion in AuditLog
+    const yemen = getYemenNow();
+    const auditEntry: AuditLog = {
+      id: 'log_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+      timestamp: `${yemen.dateStr} ${yemen.time24}`,
+      user: params.actor.name,
+      role: 'admin',
+      action: 'حذف وإلغاء سند قبض بقالة',
+      target: `${targetVoucher.voucherNumber} (${targetVoucher.partyName})`,
+      oldValue: `مبلغ السند الملغي: ${targetVoucher.amount.toLocaleString()} ر.ي | رصيد البقالة قبل الإلغاء: ${oldGroceryBal.toLocaleString()} ر.ي`,
+      newValue: `تم إلغاء أثر السند | رصيد البقالة بعد إعادة الاحتساب: ${newGroceryBal.toLocaleString()} ر.ي`,
+      details: `قام المدير (${params.actor.name}) بحذف وإلغاء الأثر المحاسبي لسند القبض رقم ${targetVoucher.voucherNumber} للبقالة (${targetVoucher.partyName}) بمبلغ ${targetVoucher.amount.toLocaleString()} ر.ي (تاريخ السند الأصلي: ${targetVoucher.date}، طريقة القبض: ${targetVoucher.paymentMethod}، البيان الأصلي: ${targetVoucher.notes}).`,
+    };
+    const nextAuditLogs = [auditEntry, ...prevAuditLogs].slice(0, 300);
+
+    // 5. Commit transaction & flush to Supabase (rollback on failure)
+    this.saveVouchers(nextVouchers);
+    this.saveGroceries(nextGroceries);
+    this.saveAuditLogs(nextAuditLogs);
+
+    const flushRes = await this.flushAll();
+    if (!flushRes.success) {
+      this.saveVouchers(prevVouchers);
+      this.saveGroceries(prevGroceries);
+      this.saveAuditLogs(prevAuditLogs);
+      return {
+        success: false,
+        error: `❌ فشل حذف سند القبض في قاعدة البيانات (تم التراجع تلقائياً لحماية الأرصدة): ${flushRes.error}`,
+      };
+    }
+
+    return {
+      success: true,
+      deletedVoucher: targetVoucher,
+      vouchers: nextVouchers,
+      groceries: nextGroceries,
+      auditLogs: nextAuditLogs,
+    };
+  },
+
   getAuditLogs(): AuditLog[] {
     return loadFromStorage(STORAGE_KEYS.AUDIT_LOGS, INITIAL_AUDIT_LOGS);
   },

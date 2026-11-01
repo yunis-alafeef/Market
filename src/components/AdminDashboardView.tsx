@@ -44,6 +44,20 @@ interface AdminDashboardViewProps {
   onDeletePaymentVoucher?: (
     voucherId: string
   ) => Promise<{ success: boolean; error?: string }>;
+  onEditReceiptVoucher?: (
+    voucherId: string,
+    updates: {
+      partyId: string;
+      amount: number;
+      date: string;
+      paymentMethod: 'cash' | 'transfer' | 'check';
+      referenceNumber?: string;
+      notes: string;
+    }
+  ) => Promise<{ success: boolean; error?: string }>;
+  onDeleteReceiptVoucher?: (
+    voucherId: string
+  ) => Promise<{ success: boolean; error?: string }>;
   onOpenPrintModal: (
     type: 'statement' | 'voucher',
     data: {
@@ -72,6 +86,8 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   onOpenNewVoucher,
   onEditPaymentVoucher,
   onDeletePaymentVoucher,
+  onEditReceiptVoucher,
+  onDeleteReceiptVoucher,
   onOpenPrintModal,
 }) => {
   // Tabs: 'groceries_ledger' | 'suppliers_ledger' | 'vouchers_log'
@@ -83,7 +99,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   const [selectedSupplierId, setSelectedSupplierId] = useState<string>(suppliers[0]?.id || '');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // State for Editing a Supplier Payment Voucher (Admin Only)
+  // State for Editing a Voucher (Admin Only)
   const [editingVoucher, setEditingVoucher] = useState<Voucher | null>(null);
   const [editPartyId, setEditPartyId] = useState<string>('');
   const [editAmount, setEditAmount] = useState<number>(0);
@@ -97,7 +113,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     message: string;
   } | null>(null);
 
-  // State for Confirming Deletion of a Supplier Payment Voucher (Admin Only)
+  // State for Confirming Deletion of a Voucher (Admin Only)
   const [deletingVoucher, setDeletingVoucher] = useState<Voucher | null>(null);
   const [isDeletingVoucher, setIsDeletingVoucher] = useState<boolean>(false);
 
@@ -115,7 +131,11 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
 
   const handleSaveEditedVoucher = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingVoucher || !onEditPaymentVoucher) return;
+    if (!editingVoucher) return;
+    const isReceipt = editingVoucher.type === 'receipt' && editingVoucher.partyType === 'grocery';
+    const handler = isReceipt ? onEditReceiptVoucher : onEditPaymentVoucher;
+    if (!handler) return;
+
     if (editAmount <= 0) {
       setVoucherActionFeedback({
         type: 'error',
@@ -125,7 +145,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     }
     setIsSavingVoucherEdit(true);
     try {
-      const res = await onEditPaymentVoucher(editingVoucher.id, {
+      const res = await handler(editingVoucher.id, {
         partyId: editPartyId,
         amount: editAmount,
         date: editDate,
@@ -141,7 +161,9 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       } else {
         setVoucherActionFeedback({
           type: 'success',
-          message: `✅ تم تحديث سند الصرف رقم (${editingVoucher.voucherNumber}) وإعادة احتساب رصيد المورد بنجاح.`,
+          message: isReceipt
+            ? `✅ تم تحديث سند القبض رقم (${editingVoucher.voucherNumber}) وإعادة احتساب رصيد البقالة بنجاح.`
+            : `✅ تم تحديث سند الصرف رقم (${editingVoucher.voucherNumber}) وإعادة احتساب رصيد المورد بنجاح.`,
         });
         setEditingVoucher(null);
       }
@@ -151,10 +173,14 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   };
 
   const handleConfirmDeleteVoucher = async () => {
-    if (!deletingVoucher || !onDeletePaymentVoucher) return;
+    if (!deletingVoucher) return;
+    const isReceipt = deletingVoucher.type === 'receipt' && deletingVoucher.partyType === 'grocery';
+    const handler = isReceipt ? onDeleteReceiptVoucher : onDeletePaymentVoucher;
+    if (!handler) return;
+
     setIsDeletingVoucher(true);
     try {
-      const res = await onDeletePaymentVoucher(deletingVoucher.id);
+      const res = await handler(deletingVoucher.id);
       if (!res.success) {
         setVoucherActionFeedback({
           type: 'error',
@@ -163,7 +189,9 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       } else {
         setVoucherActionFeedback({
           type: 'success',
-          message: `✅ تم حذف سند الصرف رقم (${deletingVoucher.voucherNumber}) للمورد (${deletingVoucher.partyName}) بمبلغ (${deletingVoucher.amount.toLocaleString()} ر.ي) وإعادة احتساب الأرصدة بنجاح.`,
+          message: isReceipt
+            ? `✅ تم حذف سند القبض رقم (${deletingVoucher.voucherNumber}) للبقالة (${deletingVoucher.partyName}) بمبلغ (${deletingVoucher.amount.toLocaleString()} ر.ي) وإعادة احتساب الأرصدة بنجاح.`
+            : `✅ تم حذف سند الصرف رقم (${deletingVoucher.voucherNumber}) للمورد (${deletingVoucher.partyName}) بمبلغ (${deletingVoucher.amount.toLocaleString()} ر.ي) وإعادة احتساب الأرصدة بنجاح.`,
         });
         setDeletingVoucher(null);
       }
@@ -940,8 +968,12 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                     .map((voucher) => {
                       const isSupplierPayment =
                         voucher.type === 'payment' && voucher.partyType === 'supplier';
+                      const isGroceryReceipt =
+                        voucher.type === 'receipt' && voucher.partyType === 'grocery';
                       const canManagePaymentVoucher =
                         isSupplierPayment && currentRole === 'admin';
+                      const canManageReceiptVoucher =
+                        isGroceryReceipt && currentRole === 'admin';
 
                       return (
                         <tr key={voucher.id} className="border-b border-slate-200 hover:bg-slate-50">
@@ -1019,6 +1051,33 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                                   <Trash2 className="w-4 h-4" />
                                 </button>
                               )}
+
+                              {/* 2. تعديل (✏️) - لسندات قبض البقالات وللمدير فقط */}
+                              {canManageReceiptVoucher && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenEditVoucher(voucher)}
+                                  className="p-1.5 text-[#0c2461] hover:bg-[#0c2461]/10 rounded-lg transition-colors cursor-pointer"
+                                  title="تعديل سند القبض ✏️"
+                                >
+                                  <Edit3 className="w-4 h-4" />
+                                </button>
+                              )}
+
+                              {/* 3. حذف (🗑) - لسندات قبض البقالات وللمدير فقط */}
+                              {canManageReceiptVoucher && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setVoucherActionFeedback(null);
+                                    setDeletingVoucher(voucher);
+                                  }}
+                                  className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                                  title="حذف سند القبض 🗑"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -1031,7 +1090,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         )}
       </div>
 
-      {/* Edit Supplier Payment Voucher Modal (Admin Only) */}
+      {/* Edit Voucher Modal (Admin Only - Supports Supplier Payment & Grocery Receipt Vouchers) */}
       {editingVoucher && currentRole === 'admin' && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <div className="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
@@ -1040,10 +1099,14 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                 <Edit3 className="w-5 h-5 text-[#f6b93b]" />
                 <div>
                   <h3 className="font-bold text-base">
-                    تعديل سند صرف مورد ({editingVoucher.voucherNumber})
+                    {editingVoucher.type === 'receipt'
+                      ? `تعديل سند قبض بقالة (${editingVoucher.voucherNumber})`
+                      : `تعديل سند صرف مورد (${editingVoucher.voucherNumber})`}
                   </h3>
                   <p className="text-[11px] text-slate-300">
-                    سيتم استبدال الأثر المحاسبي القديم للسند بالأثر الجديد وإعادة احتساب رصيد المورد تلقائياً.
+                    {editingVoucher.type === 'receipt'
+                      ? 'سيتم استبدال الأثر المحاسبي القديم للسند بالأثر الجديد وإعادة احتساب رصيد البقالة تلقائياً.'
+                      : 'سيتم استبدال الأثر المحاسبي القديم للسند بالأثر الجديد وإعادة احتساب رصيد المورد تلقائياً.'}
                   </p>
                 </div>
               </div>
@@ -1057,10 +1120,12 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
             </div>
 
             <form onSubmit={handleSaveEditedVoucher} className="p-6 space-y-4">
-              {/* Supplier Selection */}
+              {/* Party Selection (Grocery for Receipt / Supplier for Payment) */}
               <div>
                 <label className="block text-xs font-semibold text-slate-600 mb-1.5">
-                  اسم المورد (المستفيد)
+                  {editingVoucher.type === 'receipt'
+                    ? 'الجهة (البقالة)'
+                    : 'اسم المورد (المستفيد)'}
                 </label>
                 <select
                   value={editPartyId}
@@ -1068,14 +1133,23 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                   className="w-full px-3 py-2 text-sm font-bold bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#1e3799] focus:outline-none"
                   required
                 >
-                  {suppliers.map((s) => {
-                    const actualBal = supplierBalancesMap[s.id] ?? 0;
-                    return (
-                      <option key={s.id} value={s.id}>
-                        {s.name} - الرصيد الحالي: {actualBal.toLocaleString()} ر.ي
-                      </option>
-                    );
-                  })}
+                  {editingVoucher.type === 'receipt'
+                    ? groceries.map((g) => {
+                        const actualBal = groceryBalancesMap[g.id] ?? 0;
+                        return (
+                          <option key={g.id} value={g.id}>
+                            ({g.code}) {g.name} - الرصيد الحالي: {actualBal.toLocaleString()} ر.ي
+                          </option>
+                        );
+                      })
+                    : suppliers.map((s) => {
+                        const actualBal = supplierBalancesMap[s.id] ?? 0;
+                        return (
+                          <option key={s.id} value={s.id}>
+                            {s.name} - الرصيد الحالي: {actualBal.toLocaleString()} ر.ي
+                          </option>
+                        );
+                      })}
                 </select>
               </div>
 
@@ -1109,10 +1183,10 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                 </div>
               </div>
 
-              {/* Payment Method */}
+              {/* Payment / Receipt Method */}
               <div>
                 <label className="block text-xs font-semibold text-slate-600 mb-1.5">
-                  طريقة الدفع
+                  {editingVoucher.type === 'receipt' ? 'طريقة القبض' : 'طريقة الدفع'}
                 </label>
                 <div className="grid grid-cols-3 gap-2">
                   <button
@@ -1174,7 +1248,11 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                   rows={2}
                   value={editNotes}
                   onChange={(e) => setEditNotes(e.target.value)}
-                  placeholder="بيان السند وملاحظات الصرف..."
+                  placeholder={
+                    editingVoucher.type === 'receipt'
+                      ? 'بيان السند وملاحظات القبض...'
+                      : 'بيان السند وملاحظات الصرف...'
+                  }
                   className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#1e3799] focus:outline-none resize-none"
                 />
               </div>
@@ -1201,14 +1279,18 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         </div>
       )}
 
-      {/* Delete Confirmation Modal for Supplier Payment Voucher (Admin Only) */}
+      {/* Delete Confirmation Modal for Voucher (Admin Only - Supports Supplier Payment & Grocery Receipt Vouchers) */}
       {deletingVoucher && currentRole === 'admin' && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <div className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl border border-rose-200 overflow-hidden">
             <div className="flex items-center justify-between px-6 py-4 bg-rose-600 text-white">
               <div className="flex items-center gap-2">
                 <AlertTriangle className="w-5 h-5" />
-                <h3 className="font-bold text-base">تأكيد حذف وإلغاء سند صرف</h3>
+                <h3 className="font-bold text-base">
+                  {deletingVoucher.type === 'receipt'
+                    ? 'تأكيد حذف وإلغاء سند قبض'
+                    : 'تأكيد حذف وإلغاء سند صرف'}
+                </h3>
               </div>
               <button
                 type="button"
@@ -1221,7 +1303,9 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
 
             <div className="p-6 space-y-4">
               <p className="text-xs font-bold text-slate-700 leading-relaxed">
-                هل أنت متأكد من رغبتك في حذف سند الصرف التالي وإلغاء أثره المحاسبي؟
+                {deletingVoucher.type === 'receipt'
+                  ? 'هل أنت متأكد من رغبتك في حذف سند القبض التالي وإلغاء أثره المحاسبي؟'
+                  : 'هل أنت متأكد من رغبتك في حذف سند الصرف التالي وإلغاء أثره المحاسبي؟'}
               </p>
 
               <div className="bg-rose-50 border border-rose-200 rounded-xl p-4 space-y-2 text-xs">
@@ -1232,7 +1316,9 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-600 font-semibold">اسم المورد:</span>
+                  <span className="text-slate-600 font-semibold">
+                    {deletingVoucher.type === 'receipt' ? 'الجهة (البقالة):' : 'اسم المورد:'}
+                  </span>
                   <span className="font-black text-slate-900">{deletingVoucher.partyName}</span>
                 </div>
                 <div className="flex justify-between">
@@ -1248,7 +1334,9 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
               </div>
 
               <p className="text-[11px] text-slate-500 leading-relaxed">
-                عند التأكيد، سيتم إلغاء أثر هذا السند وإعادة احتساب رصيد المورد وكشف حسابه ومستحقات الموردين وصافي الموقف المالي من القيود الفعلية فوراً، مع حفظ العملية في سجل التدقيق.
+                {deletingVoucher.type === 'receipt'
+                  ? 'عند التأكيد، سيتم إلغاء أثر هذا السند وإعادة احتساب رصيد البقالة وكشف حسابها وذمم البقالات وصافي الموقف المالي من القيود الفعلية فوراً، مع حفظ العملية في سجل التدقيق.'
+                  : 'عند التأكيد، سيتم إلغاء أثر هذا السند وإعادة احتساب رصيد المورد وكشف حسابه ومستحقات الموردين وصافي الموقف المالي من القيود الفعلية فوراً، مع حفظ العملية في سجل التدقيق.'}
               </p>
 
               <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-200">
