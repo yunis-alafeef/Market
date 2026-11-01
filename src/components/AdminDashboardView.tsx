@@ -15,6 +15,11 @@ import {
   CheckCircle,
   Calendar,
   Search,
+  Edit3,
+  Trash2,
+  X,
+  Save,
+  AlertTriangle,
 } from 'lucide-react';
 
 interface AdminDashboardViewProps {
@@ -23,7 +28,22 @@ interface AdminDashboardViewProps {
   suppliers: Supplier[];
   vouchers: Voucher[];
   settings: SystemSettings;
+  currentRole?: 'admin' | 'worker' | 'grocery';
   onOpenNewVoucher: (type?: 'receipt' | 'payment', partyId?: string) => void;
+  onEditPaymentVoucher?: (
+    voucherId: string,
+    updates: {
+      partyId: string;
+      amount: number;
+      date: string;
+      paymentMethod: 'cash' | 'transfer' | 'check';
+      referenceNumber?: string;
+      notes: string;
+    }
+  ) => Promise<{ success: boolean; error?: string }>;
+  onDeletePaymentVoucher?: (
+    voucherId: string
+  ) => Promise<{ success: boolean; error?: string }>;
   onOpenPrintModal: (
     type: 'statement' | 'voucher',
     data: {
@@ -48,7 +68,10 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   suppliers,
   vouchers,
   settings,
+  currentRole = 'admin',
   onOpenNewVoucher,
+  onEditPaymentVoucher,
+  onDeletePaymentVoucher,
   onOpenPrintModal,
 }) => {
   // Tabs: 'groceries_ledger' | 'suppliers_ledger' | 'vouchers_log'
@@ -59,6 +82,95 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   const [selectedGroceryId, setSelectedGroceryId] = useState<string>(groceries[0]?.id || '');
   const [selectedSupplierId, setSelectedSupplierId] = useState<string>(suppliers[0]?.id || '');
   const [searchQuery, setSearchQuery] = useState('');
+
+  // State for Editing a Supplier Payment Voucher (Admin Only)
+  const [editingVoucher, setEditingVoucher] = useState<Voucher | null>(null);
+  const [editPartyId, setEditPartyId] = useState<string>('');
+  const [editAmount, setEditAmount] = useState<number>(0);
+  const [editDate, setEditDate] = useState<string>('');
+  const [editPaymentMethod, setEditPaymentMethod] = useState<'cash' | 'transfer' | 'check'>('cash');
+  const [editReferenceNumber, setEditReferenceNumber] = useState<string>('');
+  const [editNotes, setEditNotes] = useState<string>('');
+  const [isSavingVoucherEdit, setIsSavingVoucherEdit] = useState<boolean>(false);
+  const [voucherActionFeedback, setVoucherActionFeedback] = useState<{
+    type: 'success' | 'error';
+    message: string;
+  } | null>(null);
+
+  // State for Confirming Deletion of a Supplier Payment Voucher (Admin Only)
+  const [deletingVoucher, setDeletingVoucher] = useState<Voucher | null>(null);
+  const [isDeletingVoucher, setIsDeletingVoucher] = useState<boolean>(false);
+
+  const handleOpenEditVoucher = (v: Voucher) => {
+    if (currentRole !== 'admin') return;
+    setVoucherActionFeedback(null);
+    setEditingVoucher(v);
+    setEditPartyId(v.partyId);
+    setEditAmount(v.amount);
+    setEditDate(v.date);
+    setEditPaymentMethod(v.paymentMethod);
+    setEditReferenceNumber(v.referenceNumber || '');
+    setEditNotes(v.notes || '');
+  };
+
+  const handleSaveEditedVoucher = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingVoucher || !onEditPaymentVoucher) return;
+    if (editAmount <= 0) {
+      setVoucherActionFeedback({
+        type: 'error',
+        message: '⚠️ يرجى إدخال مبلغ صحيح أكبر من الصفر.',
+      });
+      return;
+    }
+    setIsSavingVoucherEdit(true);
+    try {
+      const res = await onEditPaymentVoucher(editingVoucher.id, {
+        partyId: editPartyId,
+        amount: editAmount,
+        date: editDate,
+        paymentMethod: editPaymentMethod,
+        referenceNumber: editReferenceNumber,
+        notes: editNotes,
+      });
+      if (!res.success) {
+        setVoucherActionFeedback({
+          type: 'error',
+          message: res.error || '⚠️ تعذر حفظ التعديلات.',
+        });
+      } else {
+        setVoucherActionFeedback({
+          type: 'success',
+          message: `✅ تم تحديث سند الصرف رقم (${editingVoucher.voucherNumber}) وإعادة احتساب رصيد المورد بنجاح.`,
+        });
+        setEditingVoucher(null);
+      }
+    } finally {
+      setIsSavingVoucherEdit(false);
+    }
+  };
+
+  const handleConfirmDeleteVoucher = async () => {
+    if (!deletingVoucher || !onDeletePaymentVoucher) return;
+    setIsDeletingVoucher(true);
+    try {
+      const res = await onDeletePaymentVoucher(deletingVoucher.id);
+      if (!res.success) {
+        setVoucherActionFeedback({
+          type: 'error',
+          message: res.error || '⚠️ تعذر حذف السند.',
+        });
+      } else {
+        setVoucherActionFeedback({
+          type: 'success',
+          message: `✅ تم حذف سند الصرف رقم (${deletingVoucher.voucherNumber}) للمورد (${deletingVoucher.partyName}) بمبلغ (${deletingVoucher.amount.toLocaleString()} ر.ي) وإعادة احتساب الأرصدة بنجاح.`,
+        });
+        setDeletingVoucher(null);
+      }
+    } finally {
+      setIsDeletingVoucher(false);
+    }
+  };
 
   // Top Statistics
   // Card 1: "مشتريات اليوم التقديرية" = Current active open worksheet total: sum of (required item qty today * costPrice), returns to 0 immediately upon settling
@@ -785,6 +897,25 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
               />
             </div>
 
+            {voucherActionFeedback && (
+              <div
+                className={`flex items-center justify-between gap-3 p-3.5 rounded-xl text-xs font-bold border ${
+                  voucherActionFeedback.type === 'success'
+                    ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                    : 'bg-rose-50 border-rose-200 text-rose-900'
+                }`}
+              >
+                <span>{voucherActionFeedback.message}</span>
+                <button
+                  type="button"
+                  onClick={() => setVoucherActionFeedback(null)}
+                  className="px-2 py-0.5 rounded hover:bg-black/5 cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+
             <div className="overflow-x-auto scrollbar-thin">
               <table className="w-full text-right border-collapse text-xs sm:text-sm">
                 <thead>
@@ -796,7 +927,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                     <th className="p-3 text-center font-bold">المبلغ</th>
                     <th className="p-3 text-center font-bold">طريقة الدفع</th>
                     <th className="p-3 font-bold">البيان والملاحظات</th>
-                    <th className="p-3 text-center font-bold">طباعة</th>
+                    <th className="p-3 text-center font-bold">الإجراءات</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -806,57 +937,342 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                         v.voucherNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
                         v.partyName.toLowerCase().includes(searchQuery.toLowerCase())
                     )
-                    .map((voucher) => (
-                      <tr key={voucher.id} className="border-b border-slate-200 hover:bg-slate-50">
-                        <td className="p-2.5 font-mono font-bold text-[#0c2461]">
-                          {voucher.voucherNumber}
-                        </td>
-                        <td className="p-2.5">
-                          <span
-                            className={`px-2 py-0.5 rounded-md text-xs font-bold ${
-                              voucher.type === 'receipt'
-                                ? 'bg-[#009432]/10 text-[#009432]'
-                                : 'bg-rose-50 text-rose-700'
-                            }`}
-                          >
-                            {voucher.type === 'receipt' ? 'سند قبض' : 'سند صرف'}
-                          </span>
-                        </td>
-                        <td className="p-2.5 font-mono text-slate-600 whitespace-nowrap">
-                          <span className="inline-flex items-baseline gap-1.5">
-                            <span>{voucher.date}</span>
-                            {extractTime12(voucher.createdAt) && (
-                              <span className="text-[10px] text-slate-400 font-normal">
-                                {extractTime12(voucher.createdAt)}
-                              </span>
-                            )}
-                          </span>
-                        </td>
-                        <td className="p-2.5 font-bold text-slate-900">{voucher.partyName}</td>
-                        <td className="p-2.5 text-center font-mono font-bold text-sm text-[#0c2461] tabular-nums">
-                          {voucher.amount.toLocaleString()} ر.ي
-                        </td>
-                        <td className="p-2.5 text-center text-slate-700">
-                          {voucher.paymentMethod === 'cash' ? 'نقداً' : voucher.paymentMethod === 'transfer' ? 'تحويل' : 'شيك'}
-                        </td>
-                        <td className="p-2.5 text-slate-600 max-w-xs truncate">{voucher.notes}</td>
-                        <td className="p-2.5 text-center">
-                          <button
-                            onClick={() => onOpenPrintModal('voucher', { voucher })}
-                            className="p-1 text-slate-500 hover:text-[#0c2461] transition-colors cursor-pointer"
-                            title="طباعة السند"
-                          >
-                            <Printer className="w-4 h-4" />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
+                    .map((voucher) => {
+                      const isSupplierPayment =
+                        voucher.type === 'payment' && voucher.partyType === 'supplier';
+                      const canManagePaymentVoucher =
+                        isSupplierPayment && currentRole === 'admin';
+
+                      return (
+                        <tr key={voucher.id} className="border-b border-slate-200 hover:bg-slate-50">
+                          <td className="p-2.5 font-mono font-bold text-[#0c2461]">
+                            {voucher.voucherNumber}
+                          </td>
+                          <td className="p-2.5">
+                            <span
+                              className={`px-2 py-0.5 rounded-md text-xs font-bold ${
+                                voucher.type === 'receipt'
+                                  ? 'bg-[#009432]/10 text-[#009432]'
+                                  : 'bg-rose-50 text-rose-700'
+                              }`}
+                            >
+                              {voucher.type === 'receipt' ? 'سند قبض' : 'سند صرف'}
+                            </span>
+                          </td>
+                          <td className="p-2.5 font-mono text-slate-600 whitespace-nowrap">
+                            <span className="inline-flex items-baseline gap-1.5">
+                              <span>{voucher.date}</span>
+                              {extractTime12(voucher.createdAt) && (
+                                <span className="text-[10px] text-slate-400 font-normal">
+                                  {extractTime12(voucher.createdAt)}
+                                </span>
+                              )}
+                            </span>
+                          </td>
+                          <td className="p-2.5 font-bold text-slate-900">{voucher.partyName}</td>
+                          <td className="p-2.5 text-center font-mono font-bold text-sm text-[#0c2461] tabular-nums">
+                            {voucher.amount.toLocaleString()} ر.ي
+                          </td>
+                          <td className="p-2.5 text-center text-slate-700">
+                            {voucher.paymentMethod === 'cash'
+                              ? 'نقداً'
+                              : voucher.paymentMethod === 'transfer'
+                              ? 'تحويل'
+                              : 'شيك'}
+                          </td>
+                          <td className="p-2.5 text-slate-600 max-w-xs truncate">{voucher.notes}</td>
+                          <td className="p-2.5 text-center">
+                            <div className="inline-flex items-center justify-center gap-1.5">
+                              {/* 1. طباعة */}
+                              <button
+                                type="button"
+                                onClick={() => onOpenPrintModal('voucher', { voucher })}
+                                className="p-1.5 text-slate-500 hover:text-[#0c2461] hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+                                title="طباعة السند"
+                              >
+                                <Printer className="w-4 h-4" />
+                              </button>
+
+                              {/* 2. تعديل (✏️) - لسندات صرف الموردين وللمدير فقط */}
+                              {canManagePaymentVoucher && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenEditVoucher(voucher)}
+                                  className="p-1.5 text-[#0c2461] hover:bg-[#0c2461]/10 rounded-lg transition-colors cursor-pointer"
+                                  title="تعديل سند الصرف ✏️"
+                                >
+                                  <Edit3 className="w-4 h-4" />
+                                </button>
+                              )}
+
+                              {/* 3. حذف (🗑) - لسندات صرف الموردين وللمدير فقط */}
+                              {canManagePaymentVoucher && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setVoucherActionFeedback(null);
+                                    setDeletingVoucher(voucher);
+                                  }}
+                                  className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                                  title="حذف سند الصرف 🗑"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                 </tbody>
               </table>
             </div>
           </div>
         )}
       </div>
+
+      {/* Edit Supplier Payment Voucher Modal (Admin Only) */}
+      {editingVoucher && currentRole === 'admin' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 bg-[#0c2461] text-white">
+              <div className="flex items-center gap-2">
+                <Edit3 className="w-5 h-5 text-[#f6b93b]" />
+                <div>
+                  <h3 className="font-bold text-base">
+                    تعديل سند صرف مورد ({editingVoucher.voucherNumber})
+                  </h3>
+                  <p className="text-[11px] text-slate-300">
+                    سيتم استبدال الأثر المحاسبي القديم للسند بالأثر الجديد وإعادة احتساب رصيد المورد تلقائياً.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingVoucher(null)}
+                className="p-1.5 text-slate-300 hover:text-white rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditedVoucher} className="p-6 space-y-4">
+              {/* Supplier Selection */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1.5">
+                  اسم المورد (المستفيد)
+                </label>
+                <select
+                  value={editPartyId}
+                  onChange={(e) => setEditPartyId(e.target.value)}
+                  className="w-full px-3 py-2 text-sm font-bold bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#1e3799] focus:outline-none"
+                  required
+                >
+                  {suppliers.map((s) => {
+                    const actualBal = supplierBalancesMap[s.id] ?? 0;
+                    return (
+                      <option key={s.id} value={s.id}>
+                        {s.name} - الرصيد الحالي: {actualBal.toLocaleString()} ر.ي
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+
+              {/* Amount & Date */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">
+                    المبلغ (ر.ي)
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    step="any"
+                    value={editAmount || ''}
+                    onChange={(e) => setEditAmount(parseFloat(e.target.value) || 0)}
+                    className="w-full px-3 py-2 text-base font-bold font-mono bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#1e3799] focus:outline-none tabular-nums"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">
+                    التاريخ
+                  </label>
+                  <input
+                    type="date"
+                    value={editDate}
+                    onChange={(e) => setEditDate(e.target.value)}
+                    className="w-full px-3 py-2 text-sm font-mono bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#1e3799] focus:outline-none"
+                    required
+                  />
+                </div>
+              </div>
+
+              {/* Payment Method */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1.5">
+                  طريقة الدفع
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditPaymentMethod('cash')}
+                    className={`py-1.5 text-xs font-semibold rounded-lg border transition-colors cursor-pointer ${
+                      editPaymentMethod === 'cash'
+                        ? 'border-[#009432] bg-[#009432]/10 text-[#009432]'
+                        : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    نقداً (كاش)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditPaymentMethod('transfer')}
+                    className={`py-1.5 text-xs font-semibold rounded-lg border transition-colors cursor-pointer ${
+                      editPaymentMethod === 'transfer'
+                        ? 'border-[#1e3799] bg-[#1e3799]/10 text-[#1e3799]'
+                        : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    تحويل بنكي
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditPaymentMethod('check')}
+                    className={`py-1.5 text-xs font-semibold rounded-lg border transition-colors cursor-pointer ${
+                      editPaymentMethod === 'check'
+                        ? 'border-[#f6b93b] bg-[#f6b93b]/10 text-slate-800'
+                        : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    شيك
+                  </button>
+                </div>
+              </div>
+
+              {/* Reference Number */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1.5">
+                  رقم الحوالة / الشيك / المرجع
+                </label>
+                <input
+                  type="text"
+                  value={editReferenceNumber}
+                  onChange={(e) => setEditReferenceNumber(e.target.value)}
+                  placeholder="مثال: نقداً بالصندوق أو رقم الحوالة"
+                  className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#1e3799] focus:outline-none"
+                />
+              </div>
+
+              {/* Notes */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1.5">
+                  البيان والملاحظات
+                </label>
+                <textarea
+                  rows={2}
+                  value={editNotes}
+                  onChange={(e) => setEditNotes(e.target.value)}
+                  placeholder="بيان السند وملاحظات الصرف..."
+                  className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#1e3799] focus:outline-none resize-none"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setEditingVoucher(null)}
+                  className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors cursor-pointer"
+                >
+                  إلغاء
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingVoucherEdit}
+                  className="flex items-center gap-2 px-6 py-2 text-sm font-bold text-white bg-[#0c2461] hover:bg-[#1e3799] disabled:opacity-60 rounded-xl shadow-md transition-all cursor-pointer"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>{isSavingVoucherEdit ? 'جارٍ الحفظ...' : 'حفظ التعديلات'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal for Supplier Payment Voucher (Admin Only) */}
+      {deletingVoucher && currentRole === 'admin' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl border border-rose-200 overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 bg-rose-600 text-white">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5" />
+                <h3 className="font-bold text-base">تأكيد حذف وإلغاء سند صرف</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDeletingVoucher(null)}
+                className="p-1.5 text-rose-100 hover:text-white rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <p className="text-xs font-bold text-slate-700 leading-relaxed">
+                هل أنت متأكد من رغبتك في حذف سند الصرف التالي وإلغاء أثره المحاسبي؟
+              </p>
+
+              <div className="bg-rose-50 border border-rose-200 rounded-xl p-4 space-y-2 text-xs">
+                <div className="flex justify-between">
+                  <span className="text-slate-600 font-semibold">رقم السند:</span>
+                  <span className="font-mono font-black text-[#0c2461]">
+                    {deletingVoucher.voucherNumber}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-600 font-semibold">اسم المورد:</span>
+                  <span className="font-black text-slate-900">{deletingVoucher.partyName}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-600 font-semibold">المبلغ المراد حذفه:</span>
+                  <span className="font-mono font-black text-rose-600 text-sm">
+                    {deletingVoucher.amount.toLocaleString()} ر.ي
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-600 font-semibold">التاريخ:</span>
+                  <span className="font-mono text-slate-700">{deletingVoucher.date}</span>
+                </div>
+              </div>
+
+              <p className="text-[11px] text-slate-500 leading-relaxed">
+                عند التأكيد، سيتم إلغاء أثر هذا السند وإعادة احتساب رصيد المورد وكشف حسابه ومستحقات الموردين وصافي الموقف المالي من القيود الفعلية فوراً، مع حفظ العملية في سجل التدقيق.
+              </p>
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setDeletingVoucher(null)}
+                  className="px-4 py-2 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors cursor-pointer"
+                >
+                  تراجع / إلغاء
+                </button>
+                <button
+                  type="button"
+                  disabled={isDeletingVoucher}
+                  onClick={handleConfirmDeleteVoucher}
+                  className="flex items-center gap-1.5 px-5 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 disabled:opacity-60 rounded-xl shadow-sm transition-colors cursor-pointer"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span>{isDeletingVoucher ? 'جارٍ الحذف...' : 'تأكيد حذف السند'}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -1,4 +1,4 @@
-import { Grocery, Supplier, VegetableItem, DailySheet, Voucher, AuditLog, SystemSettings, DailyOrderRow } from '../types';
+import { Grocery, Supplier, VegetableItem, DailySheet, Voucher, AuditLog, SystemSettings, DailyOrderRow, UserAccount } from '../types';
 
 import { supabase } from './supabase';
 
@@ -596,6 +596,344 @@ export const StorageService = {
   },
   saveVouchers(vouchers: Voucher[]): void {
     saveToStorage(STORAGE_KEYS.VOUCHERS, vouchers);
+  },
+
+  /**
+   * Pure accounting recalculation of all supplier balances from actual settled sheets
+   * minus active supplier payment vouchers.
+   */
+  computeSuppliersWithRecalculatedBalances(
+    sheets: DailySheet[],
+    vouchers: Voucher[],
+    suppliers: Supplier[]
+  ): Supplier[] {
+    const supplierPurchases: Record<string, number> = {};
+    const supplierPaid: Record<string, number> = {};
+
+    sheets.forEach((s) => {
+      if (s.status === 'settled') {
+        s.rows.forEach((r) => {
+          const unitCost = Math.max(0, Number(r.costPrice) || 0);
+          let sumGroceryQty = 0;
+          Object.values(r.quantities || {}).forEach((qVal) => {
+            const q = Math.max(0, Number(qVal) || 0);
+            if (q > 0) sumGroceryQty += q;
+          });
+          sumGroceryQty = Math.round(sumGroceryQty * 100) / 100;
+
+          const cleanSupplierName = (r.supplierName || '').replace(' (مورد إضافي)', '').trim();
+          const matchedSupplierId =
+            r.supplierId ||
+            suppliers.find((sup) => sup.name === r.supplierName || sup.name === cleanSupplierName)?.id ||
+            suppliers[0]?.id ||
+            '';
+          if (matchedSupplierId && unitCost > 0) {
+            const rowQty = sumGroceryQty > 0 ? sumGroceryQty : Math.max(0, Number(r.totalQuantity) || 0);
+            const lineCost = Math.round(rowQty * unitCost * 100) / 100;
+            supplierPurchases[matchedSupplierId] =
+              Math.round(((supplierPurchases[matchedSupplierId] || 0) + lineCost) * 100) / 100;
+          }
+        });
+      }
+    });
+
+    vouchers.forEach((v) => {
+      if (v.partyType === 'supplier' && v.type === 'payment') {
+        const amt = Math.max(0, Number(v.amount) || 0);
+        supplierPaid[v.partyId] = Math.round(((supplierPaid[v.partyId] || 0) + amt) * 100) / 100;
+      }
+    });
+
+    return suppliers.map((s) => {
+      const totalOwed = Math.round((supplierPurchases[s.id] || 0) * 100) / 100;
+      const totalPaid = Math.round((supplierPaid[s.id] || 0) * 100) / 100;
+      const netBal = Math.round((totalOwed - totalPaid) * 100) / 100;
+      return { ...s, balance: netBal };
+    });
+  },
+
+  /**
+   * Transactional Admin-only update of a Supplier Payment Voucher.
+   * Replaces the old voucher effect in-place without duplication, recalculates supplier balances
+   * from actual ledger entries, logs the audit trail, and rolls back if database flush fails.
+   */
+  async updateSupplierPaymentVoucher(params: {
+    actor?: UserAccount | null;
+    voucherId: string;
+    updates: {
+      partyId: string;
+      amount: number;
+      date: string;
+      paymentMethod: 'cash' | 'transfer' | 'check';
+      referenceNumber?: string;
+      notes: string;
+    };
+  }): Promise<{
+    success: boolean;
+    voucher?: Voucher;
+    vouchers?: Voucher[];
+    suppliers?: Supplier[];
+    auditLogs?: AuditLog[];
+    error?: string;
+  }> {
+    // 1. Backend/Service Admin Permission Verification
+    if (!params.actor || params.actor.role !== 'admin' || !params.actor.active) {
+      return {
+        success: false,
+        error: '⛔ غير مصرح: تعديل السندات المالية مخصص لمدير النظام فقط ولا يملك العامل صلاحية التعديل.',
+      };
+    }
+
+    try {
+      const { data: cloudAdminRows, error: cloudErr } = await supabase
+        .from('app_users')
+        .select('id,data')
+        .eq('id', params.actor.id)
+        .limit(1);
+      if (!cloudErr && cloudAdminRows && cloudAdminRows.length > 0) {
+        const cloudAdmin = cloudAdminRows[0].data as UserAccount;
+        if (!cloudAdmin || cloudAdmin.role !== 'admin' || !cloudAdmin.active) {
+          return {
+            success: false,
+            error: '⛔ غير مصرح من الخادم: الحساب الحالي لا يملك صلاحية مدير النظام.',
+          };
+        }
+      }
+    } catch {
+      // Fallback to verified session check if offline
+    }
+
+    // 2. Validate inputs
+    const cleanAmount = Math.round((Number(params.updates.amount) || 0) * 100) / 100;
+    if (cleanAmount <= 0) {
+      return { success: false, error: '⚠️ يرجى إدخال مبلغ صحيح أكبر من الصفر.' };
+    }
+    const cleanDate = String(params.updates.date || '').trim();
+    if (!cleanDate) {
+      return { success: false, error: '⚠️ يرجى تحديد تاريخ السند.' };
+    }
+
+    // 3. Snapshot pre-transaction state for rollback safety
+    const prevVouchers = [...this.getVouchers()];
+    const prevSuppliers = [...this.getSuppliers()];
+    const prevAuditLogs = [...this.getAuditLogs()];
+    const currentSheets = this.getDailySheets();
+
+    const targetIndex = prevVouchers.findIndex((v) => v.id === params.voucherId);
+    if (targetIndex === -1) {
+      return { success: false, error: '⚠️ السند المطلوب تعديله غير موجود.' };
+    }
+
+    const oldVoucher = prevVouchers[targetIndex];
+    if (oldVoucher.type !== 'payment' || oldVoucher.partyType !== 'supplier') {
+      return {
+        success: false,
+        error: '⚠️ هذا الإجراء مخصص لسندات الصرف الخاصة بالموردين فقط.',
+      };
+    }
+
+    const targetSupplier = prevSuppliers.find((s) => s.id === params.updates.partyId);
+    if (!targetSupplier) {
+      return { success: false, error: '⚠️ المورد المحدد غير موجود في النظام.' };
+    }
+
+    // Calculate pre-update supplier balance
+    const preBalancedSuppliers = this.computeSuppliersWithRecalculatedBalances(
+      currentSheets,
+      prevVouchers,
+      prevSuppliers
+    );
+    const oldSupplierBal =
+      preBalancedSuppliers.find((s) => s.id === oldVoucher.partyId)?.balance ?? 0;
+
+    // 4. Construct updated voucher in-place (preserving exact id and voucherNumber -> zero duplication)
+    const updatedVoucher: Voucher = {
+      ...oldVoucher,
+      id: oldVoucher.id,
+      voucherNumber: oldVoucher.voucherNumber,
+      type: 'payment',
+      partyType: 'supplier',
+      partyId: targetSupplier.id,
+      partyName: targetSupplier.name,
+      amount: cleanAmount,
+      date: cleanDate,
+      paymentMethod: params.updates.paymentMethod,
+      referenceNumber:
+        params.updates.referenceNumber !== undefined
+          ? params.updates.referenceNumber
+          : oldVoucher.referenceNumber,
+      notes: String(params.updates.notes || '').trim() || 'سداد مستحقات توريد',
+    };
+
+    const nextVouchers = prevVouchers.map((v, idx) =>
+      idx === targetIndex ? updatedVoucher : v
+    );
+    const nextSuppliers = this.computeSuppliersWithRecalculatedBalances(
+      currentSheets,
+      nextVouchers,
+      prevSuppliers
+    );
+    const newSupplierBal =
+      nextSuppliers.find((s) => s.id === targetSupplier.id)?.balance ?? 0;
+
+    const yemen = getYemenNow();
+    const auditEntry: AuditLog = {
+      id: 'log_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+      timestamp: `${yemen.dateStr} ${yemen.time24}`,
+      user: params.actor.name,
+      role: 'admin',
+      action: 'تعديل سند صرف مورد',
+      target: `${updatedVoucher.voucherNumber} (${updatedVoucher.partyName})`,
+      oldValue: `المورد: ${oldVoucher.partyName} | المبلغ: ${oldVoucher.amount.toLocaleString()} ر.ي | التاريخ: ${oldVoucher.date} | الرصيد السابق: ${oldSupplierBal.toLocaleString()} ر.ي`,
+      newValue: `المورد: ${updatedVoucher.partyName} | المبلغ: ${updatedVoucher.amount.toLocaleString()} ر.ي | التاريخ: ${updatedVoucher.date} | الرصيد المحدث: ${newSupplierBal.toLocaleString()} ر.ي`,
+      details: `قام المدير (${params.actor.name}) بتعديل سند الصرف رقم ${updatedVoucher.voucherNumber} بتاريخ ${yemen.dateStr} ${yemen.time12}. البيان: ${updatedVoucher.notes}`,
+    };
+    const nextAuditLogs = [auditEntry, ...prevAuditLogs].slice(0, 300);
+
+    // 5. Commit transaction & flush to Supabase (rollback on failure)
+    this.saveVouchers(nextVouchers);
+    this.saveSuppliers(nextSuppliers);
+    this.saveAuditLogs(nextAuditLogs);
+
+    const flushRes = await this.flushAll();
+    if (!flushRes.success) {
+      // Rollback in-memory state
+      this.saveVouchers(prevVouchers);
+      this.saveSuppliers(prevSuppliers);
+      this.saveAuditLogs(prevAuditLogs);
+      return {
+        success: false,
+        error: `❌ فشل حفظ تعديل السند في قاعدة البيانات (تم التراجع تلقائياً لحماية الأرصدة): ${flushRes.error}`,
+      };
+    }
+
+    return {
+      success: true,
+      voucher: updatedVoucher,
+      vouchers: nextVouchers,
+      suppliers: nextSuppliers,
+      auditLogs: nextAuditLogs,
+    };
+  },
+
+  /**
+   * Transactional Admin-only deletion / accounting reversal of a Supplier Payment Voucher.
+   * Cancels the voucher's financial effect, recalculates supplier balances from actual ledger entries
+   * (preserving all subsequent/prior operations accurately), preserves historical audit records,
+   * and rolls back if database flush fails.
+   */
+  async deleteSupplierPaymentVoucher(params: {
+    actor?: UserAccount | null;
+    voucherId: string;
+  }): Promise<{
+    success: boolean;
+    deletedVoucher?: Voucher;
+    vouchers?: Voucher[];
+    suppliers?: Supplier[];
+    auditLogs?: AuditLog[];
+    error?: string;
+  }> {
+    // 1. Backend/Service Admin Permission Verification
+    if (!params.actor || params.actor.role !== 'admin' || !params.actor.active) {
+      return {
+        success: false,
+        error: '⛔ غير مصرح: حذف السندات المالية مخصص لمدير النظام فقط ولا يملك العامل صلاحية الحذف.',
+      };
+    }
+
+    try {
+      const { data: cloudAdminRows, error: cloudErr } = await supabase
+        .from('app_users')
+        .select('id,data')
+        .eq('id', params.actor.id)
+        .limit(1);
+      if (!cloudErr && cloudAdminRows && cloudAdminRows.length > 0) {
+        const cloudAdmin = cloudAdminRows[0].data as UserAccount;
+        if (!cloudAdmin || cloudAdmin.role !== 'admin' || !cloudAdmin.active) {
+          return {
+            success: false,
+            error: '⛔ غير مصرح من الخادم: الحساب الحالي لا يملك صلاحية مدير النظام.',
+          };
+        }
+      }
+    } catch {
+      // Fallback to verified session check if offline
+    }
+
+    // 2. Snapshot pre-transaction state for rollback safety
+    const prevVouchers = [...this.getVouchers()];
+    const prevSuppliers = [...this.getSuppliers()];
+    const prevAuditLogs = [...this.getAuditLogs()];
+    const currentSheets = this.getDailySheets();
+
+    const targetVoucher = prevVouchers.find((v) => v.id === params.voucherId);
+    if (!targetVoucher) {
+      return { success: false, error: '⚠️ السند المطلوب حذفه غير موجود.' };
+    }
+    if (targetVoucher.type !== 'payment' || targetVoucher.partyType !== 'supplier') {
+      return {
+        success: false,
+        error: '⚠️ هذا الإجراء مخصص لسندات الصرف الخاصة بالموردين فقط.',
+      };
+    }
+
+    const preBalancedSuppliers = this.computeSuppliersWithRecalculatedBalances(
+      currentSheets,
+      prevVouchers,
+      prevSuppliers
+    );
+    const oldSupplierBal =
+      preBalancedSuppliers.find((s) => s.id === targetVoucher.partyId)?.balance ?? 0;
+
+    // 3. Remove only the target voucher and recalculate balances from actual ledger entries
+    const nextVouchers = prevVouchers.filter((v) => v.id !== params.voucherId);
+    const nextSuppliers = this.computeSuppliersWithRecalculatedBalances(
+      currentSheets,
+      nextVouchers,
+      prevSuppliers
+    );
+    const newSupplierBal =
+      nextSuppliers.find((s) => s.id === targetVoucher.partyId)?.balance ?? 0;
+
+    // 4. Record full historical reversal / deletion in AuditLog
+    const yemen = getYemenNow();
+    const auditEntry: AuditLog = {
+      id: 'log_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+      timestamp: `${yemen.dateStr} ${yemen.time24}`,
+      user: params.actor.name,
+      role: 'admin',
+      action: 'حذف وإلغاء سند صرف مورد',
+      target: `${targetVoucher.voucherNumber} (${targetVoucher.partyName})`,
+      oldValue: `مبلغ السند الملغي: ${targetVoucher.amount.toLocaleString()} ر.ي | رصيد المورد قبل الإلغاء: ${oldSupplierBal.toLocaleString()} ر.ي`,
+      newValue: `تم إلغاء أثر السند | رصيد المورد بعد إعادة الاحتساب: ${newSupplierBal.toLocaleString()} ر.ي`,
+      details: `قام المدير (${params.actor.name}) بحذف وإلغاء الأثر المحاسبي لسند الصرف رقم ${targetVoucher.voucherNumber} للمورد (${targetVoucher.partyName}) بمبلغ ${targetVoucher.amount.toLocaleString()} ر.ي (تاريخ السند الأصلي: ${targetVoucher.date}، طريقة الدفع: ${targetVoucher.paymentMethod}، البيان الأصلي: ${targetVoucher.notes}).`,
+    };
+    const nextAuditLogs = [auditEntry, ...prevAuditLogs].slice(0, 300);
+
+    // 5. Commit transaction & flush to Supabase (rollback on failure)
+    this.saveVouchers(nextVouchers);
+    this.saveSuppliers(nextSuppliers);
+    this.saveAuditLogs(nextAuditLogs);
+
+    const flushRes = await this.flushAll();
+    if (!flushRes.success) {
+      // Rollback in-memory state
+      this.saveVouchers(prevVouchers);
+      this.saveSuppliers(prevSuppliers);
+      this.saveAuditLogs(prevAuditLogs);
+      return {
+        success: false,
+        error: `❌ فشل حذف السند في قاعدة البيانات (تم التراجع تلقائياً لحماية الأرصدة): ${flushRes.error}`,
+      };
+    }
+
+    return {
+      success: true,
+      deletedVoucher: targetVoucher,
+      vouchers: nextVouchers,
+      suppliers: nextSuppliers,
+      auditLogs: nextAuditLogs,
+    };
   },
 
   getAuditLogs(): AuditLog[] {

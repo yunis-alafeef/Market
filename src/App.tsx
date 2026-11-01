@@ -633,6 +633,51 @@ function AppInner() {
     }
   };
 
+  // Edit Supplier Payment Voucher (Admin-only transactional update)
+  const handleEditPaymentVoucher = async (
+    voucherId: string,
+    updates: {
+      partyId: string;
+      amount: number;
+      date: string;
+      paymentMethod: 'cash' | 'transfer' | 'check';
+      referenceNumber?: string;
+      notes: string;
+    }
+  ): Promise<{ success: boolean; error?: string }> => {
+    const res = await StorageService.updateSupplierPaymentVoucher({
+      actor: currentUser,
+      voucherId,
+      updates,
+    });
+    if (!res.success) {
+      return { success: false, error: res.error };
+    }
+    if (res.vouchers) setVouchers(res.vouchers);
+    if (res.suppliers) setSuppliers(res.suppliers);
+    if (res.auditLogs) setAuditLogs(res.auditLogs);
+    if (res.vouchers) recalculateAllBalances(dailySheets, res.vouchers);
+    return { success: true };
+  };
+
+  // Delete Supplier Payment Voucher (Admin-only transactional deletion & balance recalculation)
+  const handleDeletePaymentVoucher = async (
+    voucherId: string
+  ): Promise<{ success: boolean; error?: string }> => {
+    const res = await StorageService.deleteSupplierPaymentVoucher({
+      actor: currentUser,
+      voucherId,
+    });
+    if (!res.success) {
+      return { success: false, error: res.error };
+    }
+    if (res.vouchers) setVouchers(res.vouchers);
+    if (res.suppliers) setSuppliers(res.suppliers);
+    if (res.auditLogs) setAuditLogs(res.auditLogs);
+    if (res.vouchers) recalculateAllBalances(dailySheets, res.vouchers);
+    return { success: true };
+  };
+
   // Add Item to System & Current Worksheet
   const handleAddItem = (newItemData: Omit<VegetableItem, 'id'>) => {
     const newItem: VegetableItem = {
@@ -862,10 +907,13 @@ function AppInner() {
             suppliers={suppliers}
             vouchers={vouchers}
             settings={settings}
+            currentRole={currentRole}
             onOpenNewVoucher={(type = 'receipt', partyId) => {
               setVoucherModalConfig({ defaultType: type, defaultPartyId: partyId });
               setIsVoucherModalOpen(true);
             }}
+            onEditPaymentVoucher={handleEditPaymentVoucher}
+            onDeletePaymentVoucher={handleDeletePaymentVoucher}
             onOpenPrintModal={(type, data) => {
               setPrintModalData({
                 title:
