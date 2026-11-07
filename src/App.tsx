@@ -296,13 +296,13 @@ function AppInner() {
       setCurrentWorksheetDate(updated.date);
     }
 
-    setDailySheets((prev) => {
-      const exists = prev.some((s) => s.id === updated.id);
-      if (exists) {
-        return prev.map((s) => (s.id === updated.id ? updated : s));
-      }
-      return [updated, ...prev];
-    });
+    const nextSheets = dailySheets.some((s) => s.id === updated.id)
+      ? dailySheets.map((s) => (s.id === updated.id ? updated : s))
+      : [updated, ...dailySheets];
+
+    setDailySheets(nextSheets);
+    StorageService.saveDailySheets(nextSheets);
+    void StorageService.flushAll();
   };
 
   // Save Night Orders directly to Supabase and keep active in dailySheets

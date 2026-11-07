@@ -571,36 +571,13 @@ export const StorageService = {
         saveToStorage(STORAGE_KEYS.DAILY_SHEETS, sheets);
       }
     } else {
-      // Ensure the un-settled sheet contains all current master items and groceries without overwriting existing quantities
-      let updated = false;
+      // Preserve active un-settled sheet rows exactly as saved - NEVER auto-inject missing items or resurrect deleted rows
       sheets = sheets.map((s) => {
-        if (s.status !== 'settled') {
-          if (!s.rows || s.rows.length === 0) {
-            updated = true;
-            return {
-              ...s,
-              rows: generateCleanRows(items, suppliers, groceries, s.date),
-              totalCost: 0,
-              totalSale: 0,
-              totalProfit: 0,
-            };
-          }
-
-          // Check if any item from master items is missing from rows
-          const existingItemIds = new Set(s.rows.map((r) => r.itemId));
-          const missingItems = items.filter((it) => !existingItemIds.has(it.id));
-          if (missingItems.length > 0) {
-            updated = true;
-            const extraRows = generateCleanRows(missingItems, suppliers, groceries, s.date);
-            return {
-              ...s,
-              rows: [...s.rows, ...extraRows],
-            };
-          }
+        if (s.status !== 'settled' && !Array.isArray(s.rows)) {
+          return { ...s, rows: [] };
         }
         return s;
       });
-      if (updated) saveToStorage(STORAGE_KEYS.DAILY_SHEETS, sheets);
     }
 
     // Sort sheets by date descending so the latest date is always at the top
