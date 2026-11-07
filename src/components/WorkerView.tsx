@@ -203,19 +203,15 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
     recalculateAndSave(updatedRows);
   };
 
-  // Add existing product from catalog to current sheet
+  // Add existing product from catalog to current sheet (allows multiple independent rows)
   const handleAddProductToSheet = (itemId: string) => {
     const item = items.find((it) => it.id === itemId);
     if (!item) return;
 
-    const existingRow = sheet.rows.find((r) => r.itemId === item.id || r.itemName === item.name);
-    if (existingRow) {
-      alert(`الصنف "${item.name}" مضاف بالفعل في كشف اليومية! يمكنك تعديل كمياته وسعره مباشرة.`);
-      return;
-    }
+    const uniqueRowId = `row_${sheet.date}_${item.id}_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
 
     const newRow: DailyOrderRow = {
-      id: `row_${sheet.date}_${item.id}_${Date.now()}`,
+      id: uniqueRowId,
       itemId: item.id,
       itemName: item.name,
       unit: item.unit,
@@ -238,20 +234,11 @@ export const WorkerView: React.FC<WorkerViewProps> = ({
     onAddAuditLog('إضافة منتج للكشف', item.name, '', `سعر البيع الافتراضي: ${item.defaultSalePrice} ر.ي`);
   };
 
-  // Change Item directly from the table or card row
+  // Change Item directly from the table or card row (allows selecting same item for different supplier/price)
   const handleRowItemChange = (rowId: string, newItemId: string) => {
     if (isLocked) return;
     const selectedItem = items.find((it) => it.id === newItemId);
     if (!selectedItem) return;
-
-    // Prevent duplicate item rows if another row already has this item
-    const isDuplicate = sheet.rows.some(
-      (r) => r.id !== rowId && (r.itemId === selectedItem.id || r.itemName.trim() === selectedItem.name.trim())
-    );
-    if (isDuplicate) {
-      alert(`⚠️ الصنف "${selectedItem.name}" موجود بالفعل في صف آخر داخل الكشف!`);
-      return;
-    }
 
     const oldItemName = sheet.rows.find((r) => r.id === rowId)?.itemName || '';
 

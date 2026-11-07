@@ -781,66 +781,43 @@ function AppInner() {
     return { success: true };
   };
 
-  // Add Item to System & Current Worksheet with duplicate prevention
+  // Add Item to System & Current Worksheet (allows multiple independent rows for same item)
   const handleAddItem = (newItemData: Omit<VegetableItem, 'id'>) => {
     const cleanName = newItemData.name.trim();
     if (!cleanName) return;
 
-    // Check duplicate name
+    // Check if item already exists in master items catalog
     const existing = items.find(
       (it) => it.name.trim().toLowerCase() === cleanName.toLowerCase()
     );
 
+    let targetItem: VegetableItem;
+
     if (existing) {
-      alert(`⚠️ الصنف "${cleanName}" مسجل مسبقاً في قاعدة البيانات!`);
-      const alreadyInSheet = currentSheet.rows.some(
-        (r) => r.itemId === existing.id || r.itemName.trim().toLowerCase() === cleanName.toLowerCase()
-      );
-      if (!alreadyInSheet) {
-        const newRow: DailyOrderRow = {
-          id: `row_${currentSheet.date}_${existing.id}`,
-          itemId: existing.id,
-          itemName: existing.name,
-          unit: existing.unit,
-          supplierId: suppliers[0]?.id || '',
-          supplierName: suppliers[0]?.name || 'مورد عام',
-          costPrice: existing.defaultCostPrice,
-          salePrice: existing.defaultCostPrice,
-          quantities: groceries.reduce((acc, g) => {
-            acc[g.id] = 0;
-            return acc;
-          }, {} as Record<string, number>),
-          totalQuantity: 0,
-          totalCost: 0,
-          totalSale: 0,
-          profit: 0,
-          status: 'pending',
-        };
-        handleUpdateSheet({
-          ...currentSheet,
-          rows: [...currentSheet.rows, newRow],
-        });
-      }
-      return;
+      targetItem = existing;
+    } else {
+      targetItem = {
+        ...newItemData,
+        name: cleanName,
+        id: `item_${Date.now()}`,
+      };
+      setItems((prev) => [...prev, targetItem]);
+      logAudit('إضافة صنف جديد للدليل', targetItem.name, '', `الوحدة: ${targetItem.unit}، سعر الشراء: ${targetItem.defaultCostPrice}`);
     }
 
-    const newItem: VegetableItem = {
-      ...newItemData,
-      name: cleanName,
-      id: `item_${Date.now()}`,
-    };
-
-    setItems((prev) => [...prev, newItem]);
+    // Always create a new independent row in the active worksheet with a unique row ID
+    const costPrice = Math.max(0, Number(newItemData.defaultCostPrice) || targetItem.defaultCostPrice || 0);
+    const uniqueRowId = `row_${currentSheet.date}_${targetItem.id}_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
 
     const newRow: DailyOrderRow = {
-      id: `row_${currentSheet.date}_${newItem.id}`,
-      itemId: newItem.id,
-      itemName: newItem.name,
-      unit: newItem.unit,
+      id: uniqueRowId,
+      itemId: targetItem.id,
+      itemName: targetItem.name,
+      unit: newItemData.unit || targetItem.unit,
       supplierId: suppliers[0]?.id || '',
       supplierName: suppliers[0]?.name || 'مورد عام',
-      costPrice: newItem.defaultCostPrice,
-      salePrice: newItem.defaultCostPrice,
+      costPrice,
+      salePrice: costPrice,
       quantities: groceries.reduce((acc, g) => {
         acc[g.id] = 0;
         return acc;
@@ -857,7 +834,12 @@ function AppInner() {
       rows: [...currentSheet.rows, newRow],
     });
 
-    logAudit('إضافة صنف جديد', newItem.name, '', `الوحدة: ${newItem.unit}، سعر الشراء: ${newItem.defaultCostPrice}`);
+    logAudit(
+      'إضافة سطر صنف للكشف',
+      targetItem.name,
+      '',
+      `سطر جديد للصنف (${targetItem.name}) بسعر شراء: ${costPrice} ر.ي`
+    );
   };
 
   // Add Supplier
